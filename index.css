@@ -1,0 +1,31 @@
+.grid-item {
+    width: 196px;
+    background-color: #ffebcd;
+    height: 200px;
+    font-size: 4em;
+    border: 2px dashed grey;
+    box-sizing: content-box;
+    text-align: center;
+}
+
+.grid-item--width2 {
+    width: 396px;
+    background-color: #ffabcd;
+}
+
+.grid-item--height2 {
+    height: 396px !important;
+    background-color: #ff9bcd !important;;
+}
+
+.grid {
+    height: 600px;
+    background-color: aquamarine;
+}
+
+span.add {
+    height: 40px;
+    width: 80px;
+    display: block;
+    background-color: #004;
+}
