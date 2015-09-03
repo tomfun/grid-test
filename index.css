@@ -1,7 +1,7 @@
 .grid-item {
     width: 196px;
     background-color: #ffebcd;
-    height: 200px;
+    height: 196px;
     font-size: 4em;
     border: 2px dashed grey;
     box-sizing: content-box;
@@ -28,4 +28,10 @@ span.add {
     width: 80px;
     display: block;
     background-color: #004;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 7px;
+    font-size: 31px;
+    text-align: center;
 }

@@ -15,7 +15,8 @@ $(document).ready(
                 .masonry();
         };
         var count = 6;
-        $('.add').click(function() {
+        $('.add').click(function(ev) {
+            ev.preventDefault();
             var trueFalse = function() {
                 return Math.random() > .5;
                 },
