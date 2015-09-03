@@ -1,18 +1,16 @@
 $(document).ready(
     function () {
-        var grid = $('.grid').masonry({
-            // options
+        var grid = $('.grid').packery({
             itemSelector: '.grid-item',
-            columnWidth:  200,
-            isFitWidth: true,
-            //isOriginLeft: false,
-            //isOriginTop: false,
-
+            columnWidth: 200,
+            rowHeight: 200,
+            gutter: 0,
+            isHorizontal: true
         });
         var onAdded = function (elem) {
-            grid.masonry( 'appended', elem )
+            grid.packery( 'appended', elem )
                 // layout
-                .masonry();
+                .packery();
         };
         var count = 6;
         $('.add').click(function(ev) {
