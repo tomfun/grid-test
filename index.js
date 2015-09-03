@@ -8,7 +8,7 @@ $(document).ready(
             isHorizontal: true
         });
         var onAdded = function (elem) {
-            grid.packery( 'appended', elem )//prepended support
+            grid.packery( 'appended', elem )//prepended support; remove too
                 // layout
                 .packery();
         };
