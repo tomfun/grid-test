@@ -1,16 +1,15 @@
 $(document).ready(
     function () {
-        var grid = $('.grid').packery({
+        var grid = $('.grid').isotope({
             itemSelector: '.grid-item',
             columnWidth: 200,
-            rowHeight: 200,
-            gutter: 0,
-            isHorizontal: true
+            layoutMode: 'fitRows',
+            isStill: false
         });
         var onAdded = function (elem) {
-            grid.packery( 'appended', elem )//prepended support; remove too
+            grid.isotope( 'appended', elem )//prepended support; remove too
                 // layout
-                .packery();
+                .isotope('layout');
         };
         var count = 6;
         $('.add').click(function(ev) {
