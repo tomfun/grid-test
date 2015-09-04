@@ -15,55 +15,53 @@ $(document).ready(
             scale                        = 50,
             contextWidth                 = 3600,
             contextHeight                = 2000,
-            debugGreed                   = true,
+            debugGreed                   = false,
             debugPolar                   = true,
-            debugCropImage                   = true,
-            maximumRadius                = 2850536294,//principal maximusm radius 285053629418320 ! on my machine
+            debugCropImage               = false,
+            maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             epsilonCaltulationFromRadius = function (r) {
                 return 180 * Math.asin(1 / r) / 2.01 / Math.PI;//1/Math.sin(epsilon  / (180 / Math.PI /2.01)) ==== radius
             },
             epsilon                      = epsilonCaltulationFromRadius(maximumRadius),
             drawGreed                    = function () {
+                var verticalLine   = function (x) {
+                        ctx.moveTo(x, 0);
+                        ctx.lineTo(x, contextHeight);
+                    },
+                    horizontalLine = function (y) {
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(contextWidth, y);
+                    },
+                    drawGrid       = function () {
+                        for (var i = 0; i < contextWidth; i += scale) {
+                            verticalLine(i);
+                        }
+                        for (i = 0; i < contextHeight; i += scale) {
+                            horizontalLine(i);
+                        }
+                    };
                 ctx.lineWidth = 2;
                 ctx.strokeStyle = "rgb(150, 150, 255)";
                 ctx.beginPath();
                 ctx.setLineDash([4, 32]);
-                for (var i = 0; i < contextWidth; i += scale) {
-                    ctx.moveTo(i, 0);
-                    ctx.lineTo(i, contextHeight);
-                }
-                for (i = 0; i < contextHeight; i += scale) {
-                    ctx.moveTo(0, i);
-                    ctx.lineTo(contextWidth, i);
-                }
+                drawGrid();
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.setLineDash([8, 24]);
-                ctx.moveTo(0, contextHeight / 2);
-                ctx.lineTo(contextWidth, contextHeight / 2);
-                ctx.moveTo(contextWidth / 2, 0);
-                ctx.lineTo(contextWidth / 2, contextHeight);
+                verticalLine(contextWidth / 2);
+                horizontalLine(contextHeight / 2);
                 ctx.stroke();
 
                 ctx.lineDashOffset = 4;
                 ctx.strokeStyle = "rgb(255, 50, 50)";
                 ctx.beginPath();
                 ctx.setLineDash([4, 32]);
-                for (var i = 0; i < contextWidth; i += scale) {
-                    ctx.moveTo(i, 0);
-                    ctx.lineTo(i, contextHeight);
-                }
-                for (i = 0; i < contextHeight; i += scale) {
-                    ctx.moveTo(0, i);
-                    ctx.lineTo(contextWidth, i);
-                }
+                drawGrid();
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.setLineDash([8, 24]);
-                ctx.moveTo(0, contextHeight / 2);
-                ctx.lineTo(contextWidth, contextHeight / 2);
-                ctx.moveTo(contextWidth / 2, 0);
-                ctx.lineTo(contextWidth / 2, contextHeight);
+                verticalLine(contextWidth / 2);
+                horizontalLine(contextHeight / 2);
                 ctx.stroke();
             },
             drawPolar                    = function () {
@@ -116,10 +114,10 @@ $(document).ready(
                         for (var j = y; j < y + height; j++) {
                             if (gridMap.hasOwnProperty(i)) {
                                 if (gridMap[i].hasOwnProperty(j)) {
-                                    if (gridMap[i][j]) {
+                                    if (gridMap[i][j].pinned) {
                                         phi += dphi;
-                                        x = Math.round(r * Math.cos(toRad(phi)));
-                                        y = Math.round(r * Math.sin(toRad(phi)));
+                                        x = Math.round(r * Math.cos(toRad(phi)) - 0.5 - width / 2);
+                                        y = Math.round(r * Math.sin(toRad(phi)) - 0.5 - height / 2);
                                         i = x + width;
                                         j = y + height;
                                         placeFree = false;
@@ -135,7 +133,7 @@ $(document).ready(
                         phi = 0;
                         r++;
                         if (r === 1) {
-                            dphi = 90;
+                            dphi = 60;
                         } else {
                             dphi = epsilonCaltulationFromRadius(r);
                         }
@@ -153,10 +151,10 @@ $(document).ready(
                 for (var i = x; i < x + width; i++) {
                     for (var j = y; j < y + height; j++) {
                         if (gridMap.hasOwnProperty(i)) {
-                            gridMap[i][j] = true;
+                            gridMap[i][j] = {pinned: true};
                         } else {
                             gridMap[i] = {};
-                            gridMap[i][j] = true;
+                            gridMap[i][j] = {pinned: true};
                         }
                     }
                 }
