@@ -12,15 +12,15 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 50,
-            contextWidth                 = 3600,
-            contextHeight                = 2000,
+            scale                        = 100,//px per block (width and height)
+            contextWidth                 = grid.width,
+            contextHeight                = grid.height,
             debugGreed                   = false,
-            debugPolar                   = true,
+            debugPolar                   = false,
             debugCropImage               = false,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             epsilonCaltulationFromRadius = function (r) {
-                return 180 * Math.asin(1 / r) / 2.01 / Math.PI;//1/Math.sin(epsilon  / (180 / Math.PI /2.01)) ==== radius
+                return 180 * Math.asin(1 / r) / 2.01 / Math.PI;// 1/Math.sin(epsilon  / (180 / Math.PI /2.01)) ==== radius
             },
             epsilon                      = epsilonCaltulationFromRadius(maximumRadius),
             drawGreed                    = function () {
@@ -147,19 +147,89 @@ $(document).ready(
                     y: y
                 };
             },
-            setNewOrigin                 = function (x, y, width, height) {
+            setNewOrigin                 = function (x, y, width, height, additionalData) {
                 for (var i = x; i < x + width; i++) {
                     for (var j = y; j < y + height; j++) {
                         if (gridMap.hasOwnProperty(i)) {
-                            gridMap[i][j] = {pinned: true};
+                            gridMap[i][j] = {pinned: true, data: additionalData};
                         } else {
                             gridMap[i] = {};
-                            gridMap[i][j] = {pinned: true};
+                            gridMap[i][j] = {pinned: true, data: additionalData};
                         }
                     }
                 }
             },
-            drawImage                    = function (image, x, y, width, height) {
+            random                       = function (min, max) {
+                return min + Math.round(Math.random() * (max - min));
+            },
+            initImage                    = function (data) {
+                var image       = data.image,
+                    dProportion = data.width / data.height,
+                    sProportion = image.width / image.height,
+                    iWidth,
+                    iHeight,
+                    scale;
+                if (dProportion > sProportion) {
+                    scale = data.width / image.width;
+                    iWidth = image.width;
+                    iHeight = iWidth / dProportion;
+                } else {
+                    scale = data.height / image.height;
+                    iHeight = image.height;
+                    iWidth = iHeight * dProportion;
+                }
+
+                var randomStateX = random(0, image.width - iWidth),
+                    randomStateY = random(0, image.height - iHeight);
+                data.imageState = {
+                    x:     randomStateX,
+                    y:     randomStateY,
+                    clipW: iWidth,
+                    clipH: iHeight,
+                    scale: scale,
+                    move:  false
+                };
+            },
+            cacheImage                   = function (data) {
+                if (!data.imageBuffer && data.image) {
+                    data.imageBuffer = document.createElement('canvas');
+                    data.imageBuffer.width = data.image.width * data.imageState.scale;
+                    data.imageBuffer.height = data.image.height * data.imageState.scale;
+                    data.imageBuffer.getContext('2d').drawImage(data.image, 0, 0, data.imageBuffer.width, data.imageBuffer.height);
+                    delete data.image;
+                    data.imageState.x *= data.imageState.scale;
+                    data.imageState.y *= data.imageState.scale;
+                    data.imageState.clipW *= data.imageState.scale;
+                    data.imageState.clipH *= data.imageState.scale;
+                    data.imageState.scale = 1;
+                }
+            },
+            createData                   = function (image, pos, color, width, height) {
+                return {
+                    image:          image,
+                    x:              transformFromMap(pos.x) + contextWidth / 2,
+                    y:              transformFromMap(pos.y) + contextHeight / 2,
+                    color:          color,
+                    positionOnMap:  pos,
+                    width:          width,
+                    height:         height,
+                    getImage:       function () {
+                        if (this.image) {
+                            return this.image;
+                        }
+                        if (this.imageBuffer) {
+                            return this.imageBuffer;
+                        }
+                    },
+                    getImageWidth:  function () {
+                        return this.getImage() ? this.getImage().width : null;
+                    },
+                    getImageHeight: function () {
+                        return this.getImage() ? this.getImage().height : null;
+                    }
+                };
+            },
+            drawImage                    = function (data) {
                 //  simple variant
                 //var ptrn = ctx.createPattern(image, 'no-repeat');
                 //ctx.fillStyle = ptrn;
@@ -171,43 +241,34 @@ $(document).ready(
 
                 //  draw with resize & clip
                 //drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
-                var dProportion = width / height,
-                    sProportion = image.width / image.height,
-                    iWidth,
-                    iHeight,
-                    scale;
-                if (dProportion > sProportion) {
-                    scale = width / image.width;
-                    iWidth = image.width;
-                    iHeight = iWidth / dProportion;
-                } else {
-                    scale = height / image.height;
-                    iHeight = image.height;
-                    iWidth = iHeight * dProportion;
-                }
+                cacheImage(data);
+                var image = data.imageBuffer;
                 if (debugCropImage) {
                     ctx.save();
                     ctx.globalAlpha = 0.3;
                     ctx.drawImage(
                         image,
-                        x,
-                        y,
-                        image.width * scale,
-                        image.height * scale
+                        data.x - data.imageState.x/* * data.imageState.scale*/,
+                        data.y - data.imageState.y/* * data.imageState.scale*/,
+                        image.width/* * data.imageState.scale*/,
+                        image.height/* * data.imageState.scale*/
                     );
-                    ctx.restore();
+                    ctx.globalAlpha = 0.9;
                 }
                 ctx.drawImage(
                     image,
-                    0,
-                    0,
-                    iWidth,
-                    iHeight,
-                    x,
-                    y,
-                    width,
-                    height
+                    data.imageState.x,
+                    data.imageState.y,
+                    data.imageState.clipW,
+                    data.imageState.clipH,
+                    data.x,
+                    data.y,
+                    data.width,
+                    data.height
                 );
+                if (debugCropImage) {
+                    ctx.restore();
+                }
             },
             addNewItem                   = function (ev) {
                 //ev.preventDefault();
@@ -237,25 +298,22 @@ $(document).ready(
                     width *= 2;
                 }
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
-                setNewOrigin(pos.x, pos.y, transformToMap(width), transformToMap(height));
-                var image = new Image();
+                var image = new Image(),
+                    data  = createData(image, pos, ctx.fillStyle, width, height);
+                setNewOrigin(pos.x, pos.y, transformToMap(width), transformToMap(height), data);
                 ctx.fillRect(
-                    transformFromMap(pos.x) + contextWidth / 2,
-                    transformFromMap(pos.y) + contextHeight / 2,
+                    data.x,
+                    data.y,
                     width,
                     height
                 );
                 image.addEventListener('load', function () {
-                    drawImage(image,
-                        transformFromMap(pos.x) + contextWidth / 2,
-                        transformFromMap(pos.y) + contextHeight / 2,
-                        width,
-                        height
-                    );
-                    onLoaded();
+                    initImage(data);
+                    drawImage(data);
+                    onLoaded(data);
                 }, false);
                 image.src = '/' + img();
-                onAdded();
+                onAdded(data);
                 count++;
             },
             addNewItems                  = function (n) {
@@ -266,8 +324,122 @@ $(document).ready(
                     addNewItem();
                 }
             };
+        var drawItem       = function (data) {
+                ctx.fillStyle = data.color;
+                ctx.fillRect(
+                    data.x,
+                    data.y,
+                    data.width,
+                    data.height
+                );
+                drawImage(data);
+            },
+            redrawItems    = function (filter) {
+                var drawed = [];
+                for (var x in gridMap) {
+                    for (var y in gridMap[x]) {
+                        if (drawed.indexOf(gridMap[x][y].data) === -1) {
+                            if (filter === undefined || filter(x, y)) {
+                                drawItem(gridMap[x][y].data);
+                                drawed.push(gridMap[x][y].data);
+                            }
+                        }
+                    }
+                }
+            },
+            animationOn    = false,
+            viewPortFilter = function (data) {
+                return true;
+            },
+            animationSpeed = 8, //px per second
+            animate        = function () {
+                if (!animationOn) {
+                    return;
+                }
+                var drawed = [];
+//                ctx.clearRect(0, 0, contextWidth, contextHeight);
+                for (var x in gridMap) {
+                    for (var y in gridMap[x]) {
+                        if (drawed.indexOf(gridMap[x][y].data) === -1) {
+                            var data = gridMap[x][y].data;
+                            if (!data.getImage() || !data.imageState || !viewPortFilter(gridMap[x][y])) {
+                                //drawItem(data);//todo
+                                //drawed.push(gridMap[x][y].data);
+                                continue;
+                            }
+                            if (data.imageState.move === false) {
+                                if (data.getImage().width - data.imageState.clipW) {
+                                    data.imageState.move = 'right';
+                                }
+                                if (data.getImage().height - data.imageState.clipH) {
+                                    data.imageState.move = 'bottom';
+                                }
+                            }
+                            var time    = (new Date()).getTime(),
+                                oldTime,
+                                diff;
+                            if (!data.imageState.animationState) {
+                                data.imageState.animationState = time;
+                                continue;
+                            }
+                            oldTime = data.imageState.animationState;
+                            diff    = Math.round((time - oldTime) * animationSpeed / 1000);
+                            if (diff <= 0) {
+                                continue;//todo: draw old state
+                            }
+                            if (data.imageState.move === 'right') {
+                                if (data.imageState.x < data.getImage().width - data.imageState.clipW) {
+                                    data.imageState.x += diff;
+                                    if (data.imageState.x > data.getImage().width - data.imageState.clipW) {
+                                        data.imageState.x = data.getImage().width - data.imageState.clipW;
+                                    }
+                                } else {
+                                    data.imageState.move = 'left';
+                                }
+                            }
+                            if (data.imageState.move === 'left') {
+                                if (data.imageState.x > 0) {
+                                    data.imageState.x -= diff;
+                                    if (data.imageState.x < 0) {
+                                        data.imageState.x = 0;
+                                    }
+                                } else {
+                                    data.imageState.move = 'right';
+                                }
+                            }
+
+
+                            if (data.imageState.move === 'bottom') {
+                                if (data.imageState.y < data.getImage().height - data.imageState.clipH) {
+                                    data.imageState.y++;
+                                } else {
+                                    data.imageState.move = 'top';
+                                }
+                            }
+                            if (data.imageState.move === 'top') {
+                                if (data.imageState.y > 0) {
+                                    data.imageState.y--;
+                                } else {
+                                    data.imageState.move = 'bottom';
+                                }
+                            }
+                            data.imageState.animationState = time;
+                            drawItem(data);
+                            drawed.push(gridMap[x][y].data);
+                        }
+                    }
+                }
+                window.requestAnimationFrame(animate);
+            };
         $('.add').click(addNewItem);
         $('.addn').click(addNewItems);
+        $('.redraw').click(function () {
+            redrawItems();
+        });
+        $('.animate').click(function () {
+            animationOn = !animationOn;
+            window.requestAnimationFrame(animate);
+        });
 
         // debug -----------
         if (debugGreed) {

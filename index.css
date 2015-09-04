@@ -20,12 +20,12 @@
 }
 
 .grid {
-    height: 2000px;
-    width: 3600px;
+    /*height: 600px;*/
+    /*width: 800px;*/
     background-color: aquamarine;
 }
 
-span.add, span.addn {
+span.add, span.addn, span.redraw, span.animate {
     height: 40px;
     width: 80px;
     display: inline-block;
