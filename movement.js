@@ -5,7 +5,7 @@ $(document).ready(function ($) {
         start(10, 10);
         elementFocused = event.target;
         if (mouseDown) {
-            inputmove(10 + event.deltaX * event.deltaFactor, 10 + event.deltaY * event.deltaFactor);
+            inputmove(10 + event.deltaX * event.deltaFactor / 2, 10 + event.deltaY * event.deltaFactor / 2);
         }
 
         end();

@@ -319,10 +319,11 @@ $(document).ready(
                     }
                     return res;
                 };
-                var holes = find();
+                var holes = find(),
+                    holeKey;
                 if (debugHighlightHole) {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-                    for (var holeKey in holes) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+                    for (holeKey in holes) {
                         if (holes.hasOwnProperty(holeKey)) {
                             ctx.fillRect(
                                 viewCenterX + transformFromMap(holes[holeKey].x),
@@ -330,6 +331,48 @@ $(document).ready(
                                 scale,
                                 scale
                             );
+                        }
+                    }
+                }
+                var createDuplicate = function (x, y, newX, newY) {
+                    if (hasItem(x, y) && gridMap[x][y].pinned) {
+                        if (!gridMap.hasOwnProperty(newX)) {
+                            gridMap[newX] = {};
+                        }
+                        var data = createData(undefined, {
+                            x: newX,
+                            y: newY
+                        }, gridMap[x][y].data.color, scale, scale);
+                        gridMap[newX][newY] = {pinned: false, duplicate: true, data: data};
+                        if (gridMap[x][y].data.imageSrc) {
+                            data.image = new Image();
+                            data.imageSrc = gridMap[x][y].data.imageSrc;
+                            data.image.addEventListener('load', function () {
+                                initImage(data);
+                                drawImage(data);
+                            }, false);
+                            data.image.src = gridMap[x][y].data.imageSrc;
+                        }
+                        return true;
+                    }
+                    return false;
+                };
+                for (holeKey in holes) {
+                    if (holes.hasOwnProperty(holeKey)) {
+                        var x = holes[holeKey].x,
+                            y = holes[holeKey].y;
+                        if (hasItem(x, y) && gridMap[x][y].duplicate) {
+                            continue;
+                        }
+                        for (var i = 0; i < 8; i++) {
+                            var j = -x;
+                            if (createDuplicate(y + i, j, x, y)
+                                || createDuplicate(-(y + i), -j, x, y)
+                                || createDuplicate(y + i, j + 1, x, y)
+                                || createDuplicate(-(y + i), -j - 1, x, y)
+                            ) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -380,29 +423,47 @@ $(document).ready(
                 }
             },
             createData                   = function (image, pos, color, width, height) {
-                return {
-                    image:          image,
-                    x:              transformFromMap(pos.x) + viewCenterX,
-                    y:              transformFromMap(pos.y) + viewCenterY,
-                    color:          color,
-                    positionOnMap:  pos,
-                    width:          width,
-                    height:         height,
-                    getImage:       function () {
-                        if (this.image) {
-                            return this.image;
+                var img = image ? (new Image()) : false,
+                    res   = {
+                        imageSrc:       image,//src
+                        image:          img,
+                        x:              transformFromMap(pos.x) + viewCenterX,
+                        y:              transformFromMap(pos.y) + viewCenterY,
+                        color:          color,
+                        positionOnMap:  pos,
+                        width:          width,
+                        height:         height,
+                        getImage:       function () {
+                            if (this.image) {
+                                return this.image;
+                            }
+                            if (this.imageBuffer) {
+                                return this.imageBuffer;
+                            }
+                        },
+                        getImageWidth:  function () {
+                            return this.getImage() ? this.getImage().width : null;
+                        },
+                        getImageHeight: function () {
+                            return this.getImage() ? this.getImage().height : null;
+                        },
+                        setImageSrc: function(src) {
+                            if (!src) {
+                                src = this.imageSrc;
+                                this.image.src = src;
+                                this.imageSrc = src;
+                            }
+                            img.addEventListener('load', function () {
+                                initImage(res);
+                                drawImage(res);
+                                onLoaded(res);
+                            }, false);
                         }
-                        if (this.imageBuffer) {
-                            return this.imageBuffer;
-                        }
-                    },
-                    getImageWidth:  function () {
-                        return this.getImage() ? this.getImage().width : null;
-                    },
-                    getImageHeight: function () {
-                        return this.getImage() ? this.getImage().height : null;
-                    }
-                };
+                    };
+                if (image) {
+                    res.setImageSrc();
+                }
+                return res;
             },
             drawImage                    = function (data) {
                 //  simple variant
@@ -481,7 +542,7 @@ $(document).ready(
                 //}
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
                 var image = new Image(),
-                    data  = createData(image, pos, ctx.fillStyle, width, height);
+                    data  = createData('/' + img(), pos, ctx.fillStyle, width, height);
                 setNewOrigin(pos.x, pos.y, transformToMap(width), transformToMap(height), data);
                 ctx.fillRect(
                     data.x,
@@ -489,12 +550,6 @@ $(document).ready(
                     width,
                     height
                 );
-                image.addEventListener('load', function () {
-                    initImage(data);
-                    drawImage(data);
-                    onLoaded(data);
-                }, false);
-                image.src = '/' + img();
                 onAdded(data);
                 count++;
             },
@@ -685,7 +740,7 @@ $(document).ready(
             });
         });
 
-        // Events --------------
+// Events --------------
 
         eventedCallbacks.click = [
             function (e, origin, x, y) {
@@ -722,7 +777,7 @@ $(document).ready(
             animationOn = !animationOn;
             window.requestAnimationFrame(animate);
         });
-        // scroll
+// scroll
         window.scrollCallback = function (dx, dy) {
             $('span.debugg').text('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
             //console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
@@ -741,7 +796,7 @@ $(document).ready(
             animationOn = wasAnimation;
         };
 
-        // debug -----------
+// debug -----------
         if (debugGreed) {
             drawGreed();
         }
@@ -750,5 +805,6 @@ $(document).ready(
         }
 
     }
-);
+)
+;
 
