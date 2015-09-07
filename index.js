@@ -270,16 +270,50 @@ $(document).ready(
                         ctx.arc(viewCenterX, viewCenterY, transformFromMap(Math.sqrt(maxRadius)), 0, Math.PI * 2);
                         ctx.stroke();
                     }
-
-                    for (var i = Math.floor(-Math.sqrt(maxRadius)); i * i <= maxRadius; i++) {
-                        for (var j = Math.floor(-Math.sqrt(maxRadius)); j * j <= maxRadius; j++) {
+                    var radius = Math.ceil(Math.sqrt(maxRadius));
+                    for (var i = Math.floor(-Math.sqrt(maxRadius)); i * i <= maxRadius || i < 0; i++) {
+                        for (var j = Math.floor(-Math.sqrt(maxRadius)); j * j <= maxRadius || j < 0; j++) {
                             if ((i + .5) * (i + .5) + (j + .5) * (j + .5) >= maxRadius) {
                                 continue;//карйние элементы не считаются дырявыми
                             }
-                            //разбиваем на квадранты и ищем соседей (не дубли, а реальные)
-
+                            //ищем соседей (не дубли, а реальные)
                             if (!hasItem(i, j) || !gridMap[i][j].pinned) {
                                 res.push({x: i, y: j});
+                            }
+                        }
+                    }
+                    //фильтруем от пустоты без соседей
+                    var checkMask        = {},
+                        inCheckMask      = function (x, y) {
+                            return checkMask.hasOwnProperty(x + ',' + y);
+                        },
+                        searchHole       = function (x, y) {
+                            checkMask[x + ',' + y] = true;
+                            if (x * x + y * y > maxRadius) {
+                                return false;//not a closed hole
+                            }
+                            if (hasItem(x, y) && gridMap[x][y].pinned) {
+                                return true;//has neighbour
+                            }
+                            return (inCheckMask(x - 1, y) || searchHole(x - 1, y))
+                                && (inCheckMask(x + 1, y) || searchHole(x + 1, y))
+                                && (inCheckMask(x, y - 1) || searchHole(x, y - 1))
+                                && (inCheckMask(x, y + 1) || searchHole(x, y + 1));
+                        },
+                        isEmptyPointHole = function (hole) {
+                            checkMask = {};
+                            var x = hole.x,
+                                y = hole.y;
+                            return (!hasItem(x, y) || !gridMap[x][y].pinned)
+                                && searchHole(x - 1, y)
+                                && searchHole(x + 1, y)
+                                && searchHole(x, y - 1)
+                                && searchHole(x, y + 1);
+                        };
+                    for (var holeKey in res) {
+                        if (res.hasOwnProperty(holeKey)) {
+                            if (!isEmptyPointHole(res[holeKey])) {
+                                delete res[holeKey];
                             }
                         }
                     }
@@ -287,7 +321,7 @@ $(document).ready(
                 };
                 var holes = find();
                 if (debugHighlightHole) {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
                     for (var holeKey in holes) {
                         if (holes.hasOwnProperty(holeKey)) {
                             ctx.fillRect(
@@ -429,18 +463,18 @@ $(document).ready(
                     height    = scale,
                     pos;
                 ctx.fillStyle = color();
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
-                //if (trueFalse()) {
-                //    width *= 2;
-                //}
-                //if (trueFalse()) {
-                //    width *= 2;
-                //}
+                if (trueFalse()) {
+                    height *= 2;
+                }
+                if (trueFalse()) {
+                    height *= 2;
+                }
+                if (trueFalse()) {
+                    width *= 2;
+                }
+                if (trueFalse()) {
+                    width *= 2;
+                }
                 //if (trueFalse()) {
                 //    width *= 2;
                 //    height *= 2;
