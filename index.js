@@ -12,13 +12,14 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 100,//px per block (width and height)
+            scale                        = 50,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
             viewCenterY                  = contextHeight / 2,
-            debugGreed                   = false,
-            debugPolar                   = false,
+            debugGreed                   = true,
+            debugPolar                   = true,
+            debugHighlightHole           = true,
             debugCropImage               = false,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             epsilonCaltulationFromRadius = function (r) {
@@ -83,6 +84,7 @@ $(document).ready(
                 if (debugPolar) {
                     drawPolar();
                 }
+                hideHoles();
             },
             onLoaded                     = function (elem) {
                 if (debugGreed) {
@@ -92,7 +94,7 @@ $(document).ready(
                     drawPolar();
                 }
             },
-            onAnimationEnd = function () {
+            onAnimationEnd               = function () {
                 if (debugGreed) {
                     drawGreed();
                 }
@@ -117,24 +119,27 @@ $(document).ready(
                     dphi  = 90,
                     toRad = function (n) {
                         return n * 2 * Math.PI / 360;
-                    };
-                do {
-                    var placeFree = true;
-                    for (var i = x; i < x + width; i++) {
-                        for (var j = y; j < y + height; j++) {
-                            if (gridMap.hasOwnProperty(i)) {
-                                if (gridMap[i].hasOwnProperty(j)) {
-                                    if (gridMap[i][j].pinned) {
-                                        phi += dphi;
-                                        x = Math.round(r * Math.cos(toRad(phi)) - 0.5 - width / 2);
-                                        y = Math.round(r * Math.sin(toRad(phi)) - 0.5 - height / 2);
-                                        i = x + width;
-                                        j = y + height;
-                                        placeFree = false;
+                    },
+                    placeFree,
+                    find  = function () {
+                        for (var i = x; i < x + width; i++) {
+                            for (var j = y; j < y + height; j++) {
+                                if (gridMap.hasOwnProperty(i)) {
+                                    if (gridMap[i].hasOwnProperty(j)) {
+                                        if (gridMap[i][j].pinned) {
+                                            return false;
+                                        }
                                     }
                                 }
                             }
                         }
+                        return true;
+                    };
+                do {
+                    if (!(placeFree = find())) {
+                        phi += dphi;
+                        x = Math.round(r * Math.cos(toRad(phi)) - width / 2);
+                        y = Math.round(r * Math.sin(toRad(phi)) - height / 2);
                     }
                     if (placeFree) {
                         break;
@@ -152,10 +157,50 @@ $(document).ready(
                         }
                     }
                 } while (true);
+                var rX = x, rY = y, maxRadius = function (x, y, max) {
+                        var t = x,
+                            r = x * x + y * y;
+                        if (r > max) {
+                            max = r;
+                        }
+                        x += width;
+                        r = x * x + y * y;
+                        if (r > max) {
+                            max = r;
+                        }
+                        y += height;
+                        r = t * t + y * y;
+                        if (r > max) {
+                            max = r;
+                        }
+                        r = x * x + y * y;
+                        if (r > max) {
+                            max = r;
+                        }
+                        return max;
+                    },
+                    rR = maxRadius(x, y, 0);
+                if (r >= 2) {
+                    while (phi < -dphi + 360 + epsilon) {
+                        if (find()) {
+                            if (maxRadius(x, y, 0) < rR) {
+                                rX = x;
+                                rY = y;
+                                rR = maxRadius(x, y, 0);
+                            }
+                        }
+                        phi += dphi;
+                        x = Math.round(r * Math.cos(toRad(phi)) - width / 2);
+                        y = Math.round(r * Math.sin(toRad(phi)) - height / 2);
+                    }
+                }
                 return {
-                    x: x,
-                    y: y
+                    x: rX,
+                    y: rY
                 };
+            },
+            hasItem                      = function (x, y) {
+                return gridMap.hasOwnProperty(x) && gridMap[x].hasOwnProperty(y);
             },
             setNewOrigin                 = function (x, y, width, height, additionalData) {
                 for (var i = x; i < x + width; i++) {
@@ -176,6 +221,81 @@ $(document).ready(
                         if (all || processed.indexOf(gridMap[x][y].data) === -1) {
                             cb(gridMap[x][y]);
                             processed.push(gridMap[x][y].data);
+                        }
+                    }
+                }
+            },
+            hideHoles                    = function () {
+                var find = function () {
+                    //функция поиска дыр на карте
+                    var res        = [],
+                        maxRadius  = 0,
+                        itemsCount = 0;
+                    // находим максимальный радиус
+                    eachOrigin(function (origin) {
+                        var x = origin.data.positionOnMap.x,
+                            y = origin.data.positionOnMap.y,
+                            t = x;
+                        if (!origin.pinned) {
+                            return;
+                        }
+                        itemsCount++;
+                        var r = x * x + y * y;
+                        if (r > maxRadius) {
+                            maxRadius = r;
+                        }
+                        x += transformToMap(origin.data.width);
+                        r = x * x + y * y;
+                        if (r > maxRadius) {
+                            maxRadius = r;
+                        }
+                        y += transformToMap(origin.data.height);
+                        r = t * t + y * y;
+                        if (r > maxRadius) {
+                            maxRadius = r;
+                        }
+                        r = x * x + y * y;
+                        if (r > maxRadius) {
+                            maxRadius = r;
+                        }
+                    });
+                    if (maxRadius < 8 || itemsCount < 4) {
+                        return [];//дыр тоже нет
+                    }
+                    if (debugHighlightHole) {
+                        ctx.strokeStyle = "rgb(150, 10, 10)";
+                        ctx.lineDashOffset = 0;
+                        ctx.setLineDash([]);
+                        ctx.beginPath();
+                        ctx.arc(viewCenterX, viewCenterY, transformFromMap(Math.sqrt(maxRadius)), 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    for (var i = Math.floor(-Math.sqrt(maxRadius)); i * i <= maxRadius; i++) {
+                        for (var j = Math.floor(-Math.sqrt(maxRadius)); j * j <= maxRadius; j++) {
+                            if ((i + .5) * (i + .5) + (j + .5) * (j + .5) >= maxRadius) {
+                                continue;//карйние элементы не считаются дырявыми
+                            }
+                            //разбиваем на квадранты и ищем соседей (не дубли, а реальные)
+
+                            if (!hasItem(i, j) || !gridMap[i][j].pinned) {
+                                res.push({x: i, y: j});
+                            }
+                        }
+                    }
+                    return res;
+                };
+                var holes = find();
+                if (debugHighlightHole) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                    for (var holeKey in holes) {
+                        if (holes.hasOwnProperty(holeKey)) {
+                            ctx.fillRect(
+                                viewCenterX + transformFromMap(holes[holeKey].x),
+                                viewCenterY + transformFromMap(holes[holeKey].y),
+                                scale,
+                                scale
+                            );
                         }
                     }
                 }
@@ -264,6 +384,9 @@ $(document).ready(
                 //drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
                 cacheImage(data);
                 var image = data.imageBuffer;
+                if (!image) {
+                    return;
+                }
                 if (debugCropImage) {
                     ctx.save();
                     ctx.globalAlpha = 0.3;
@@ -306,18 +429,22 @@ $(document).ready(
                     height    = scale,
                     pos;
                 ctx.fillStyle = color();
-                if (trueFalse()) {
-                    height = scale * 2;
-                }
-                if (trueFalse()) {
-                    height *= 2;
-                }
-                if (trueFalse()) {
-                    width = scale * 2;
-                }
-                if (trueFalse()) {
-                    width *= 2;
-                }
+                //if (trueFalse()) {
+                //    height *= 2;
+                //}
+                //if (trueFalse()) {
+                //    height *= 2;
+                //}
+                //if (trueFalse()) {
+                //    width *= 2;
+                //}
+                //if (trueFalse()) {
+                //    width *= 2;
+                //}
+                //if (trueFalse()) {
+                //    width *= 2;
+                //    height *= 2;
+                //}
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
                 var image = new Image(),
                     data  = createData(image, pos, ctx.fillStyle, width, height);
@@ -346,16 +473,20 @@ $(document).ready(
                 }
             };
         var drawItem       = function (data) {
-                ctx.fillStyle = data.color;
-                ctx.fillRect(
-                    data.x,
-                    data.y,
-                    data.width,
-                    data.height
-                );
-                drawImage(data);
+                if (data.getImage() && data.imageState) {
+                    drawImage(data);
+                } else {
+                    ctx.fillStyle = data.color;
+                    ctx.fillRect(
+                        data.x,
+                        data.y,
+                        data.width,
+                        data.height
+                    );
+                }
             },
             redrawItems    = function (filter) {
+                ctx.clearRect(0, 0, contextWidth, contextHeight);
                 var drawed = [];
                 for (var x in gridMap) {
                     for (var y in gridMap[x]) {
@@ -369,7 +500,7 @@ $(document).ready(
                 }
             },
             animationOn    = false,
-            animationNow = false;
+            animationNow   = false,
             viewPortFilter = function (data) {
                 return true;
             },
@@ -560,10 +691,10 @@ $(document).ready(
         // scroll
         window.scrollCallback = function (dx, dy) {
             $('span.debugg').text('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
-            console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
+            //console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
             var wasAnimation = animationOn;
             animationOn = false;
-            while(animationNow) {
+            while (animationNow) {
                 console.log('interlocked!');
             }
             eachOrigin(function (origin) {
