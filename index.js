@@ -15,6 +15,8 @@ $(document).ready(
             scale                        = 100,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
+            viewCenterX                  = contextWidth / 2,
+            viewCenterY                  = contextHeight / 2,
             debugGreed                   = false,
             debugPolar                   = false,
             debugCropImage               = false,
@@ -33,10 +35,10 @@ $(document).ready(
                         ctx.lineTo(contextWidth, y);
                     },
                     drawGrid       = function () {
-                        for (var i = 0; i < contextWidth; i += scale) {
+                        for (var i = viewCenterX % scale; i < contextWidth; i += scale) {
                             verticalLine(i);
                         }
-                        for (i = 0; i < contextHeight; i += scale) {
+                        for (i = viewCenterY % scale; i < contextHeight; i += scale) {
                             horizontalLine(i);
                         }
                     };
@@ -48,8 +50,8 @@ $(document).ready(
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.setLineDash([8, 24]);
-                verticalLine(contextWidth / 2);
-                horizontalLine(contextHeight / 2);
+                verticalLine(viewCenterX);
+                horizontalLine(viewCenterY);
                 ctx.stroke();
 
                 ctx.lineDashOffset = 4;
@@ -60,8 +62,8 @@ $(document).ready(
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.setLineDash([8, 24]);
-                verticalLine(contextWidth / 2);
-                horizontalLine(contextHeight / 2);
+                verticalLine(viewCenterX);
+                horizontalLine(viewCenterY);
                 ctx.stroke();
             },
             drawPolar                    = function () {
@@ -70,7 +72,7 @@ $(document).ready(
                 var maxRadius = contextHeight > contextWidth ? contextHeight : contextWidth;
                 maxRadius = transformToMap(maxRadius);
                 for (var i = 0; i < maxRadius; i++) {
-                    ctx.arc(contextWidth / 2, contextHeight / 2, transformFromMap(i), 0, 2 * Math.PI);
+                    ctx.arc(viewCenterX, viewCenterY, transformFromMap(i), 0, 2 * Math.PI);
                 }
                 ctx.stroke();
             },
@@ -83,6 +85,14 @@ $(document).ready(
                 }
             },
             onLoaded                     = function (elem) {
+                if (debugGreed) {
+                    drawGreed();
+                }
+                if (debugPolar) {
+                    drawPolar();
+                }
+            },
+            onAnimationEnd = function () {
                 if (debugGreed) {
                     drawGreed();
                 }
@@ -159,6 +169,17 @@ $(document).ready(
                     }
                 }
             },
+            eachOrigin                   = function (cb, all) {
+                var processed = [];
+                for (var x in gridMap) {
+                    for (var y in gridMap[x]) {
+                        if (all || processed.indexOf(gridMap[x][y].data) === -1) {
+                            cb(gridMap[x][y]);
+                            processed.push(gridMap[x][y].data);
+                        }
+                    }
+                }
+            },
             random                       = function (min, max) {
                 return min + Math.round(Math.random() * (max - min));
             },
@@ -207,8 +228,8 @@ $(document).ready(
             createData                   = function (image, pos, color, width, height) {
                 return {
                     image:          image,
-                    x:              transformFromMap(pos.x) + contextWidth / 2,
-                    y:              transformFromMap(pos.y) + contextHeight / 2,
+                    x:              transformFromMap(pos.x) + viewCenterX,
+                    y:              transformFromMap(pos.y) + viewCenterY,
                     color:          color,
                     positionOnMap:  pos,
                     width:          width,
@@ -348,6 +369,7 @@ $(document).ready(
                 }
             },
             animationOn    = false,
+            animationNow = false;
             viewPortFilter = function (data) {
                 return true;
             },
@@ -356,14 +378,15 @@ $(document).ready(
                 if (!animationOn) {
                     return;
                 }
+                animationNow = true;
                 var drawed = [];
-//                ctx.clearRect(0, 0, contextWidth, contextHeight);
+                ctx.clearRect(0, 0, contextWidth, contextHeight);
                 for (var x in gridMap) {
                     for (var y in gridMap[x]) {
                         if (drawed.indexOf(gridMap[x][y].data) === -1) {
                             var data = gridMap[x][y].data;
                             if (!data.getImage() || !data.imageState || !viewPortFilter(gridMap[x][y])) {
-                                //drawItem(data);//todo
+                                drawItem(data);//todo
                                 //drawed.push(gridMap[x][y].data);
                                 continue;
                             }
@@ -375,7 +398,7 @@ $(document).ready(
                                     data.imageState.move = 'bottom';
                                 }
                             }
-                            var time    = (new Date()).getTime(),
+                            var time = (new Date()).getTime(),
                                 oldTime,
                                 diff;
                             if (!data.imageState.animationState) {
@@ -383,8 +406,9 @@ $(document).ready(
                                 continue;
                             }
                             oldTime = data.imageState.animationState;
-                            diff    = Math.round((time - oldTime) * animationSpeed / 1000);
+                            diff = Math.round((time - oldTime) * animationSpeed / 1000);
                             if (diff <= 0) {
+                                drawItem(data);//todo
                                 continue;//todo: draw old state
                             }
                             if (data.imageState.move === 'right') {
@@ -429,8 +453,101 @@ $(document).ready(
                         }
                     }
                 }
+                onAnimationEnd();
+                animationNow = false;
                 window.requestAnimationFrame(animate);
+                //if ( !window.requestAnimationFrame ) {
+                //
+                //    window.requestAnimationFrame = ( function() {
+                //
+                //        return window.webkitRequestAnimationFrame ||
+                //            window.mozRequestAnimationFrame ||
+                //            window.oRequestAnimationFrame ||
+                //            window.msRequestAnimationFrame ||
+                //            function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+                //                window.setTimeout( callback, 1000 / 60 );
+                //            };
+                //
+                //    }());
+                //
+                //}
             };
+        var eventedCallbacks = {},
+            filterByCoord    = function (x, y, cb) {
+                eachOrigin(function (origin) {
+                    var data = origin.data;
+                    if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
+                        cb(origin);
+                    }
+                });
+            };
+        grid.addEventListener('mouseover', function (e) {
+            console.log('in', e);
+        });
+
+        grid.addEventListener("mouseout", function (e) {
+            console.log('out', e);
+        });
+
+        grid.addEventListener("click", function (e) {
+            if (!eventedCallbacks.hasOwnProperty('click')) {
+                return;
+            }
+            filterByCoord(e.layerX, e.layerY, function (origin) {
+                for (var i in eventedCallbacks.click) {
+                    eventedCallbacks.click[i](e, origin, e.layerX, e.layerY);
+                }
+            });
+        });
+        grid.addEventListener("mousedown", function (e) {
+            if (!eventedCallbacks.hasOwnProperty('mousedown')) {
+                return;
+            }
+            filterByCoord(e.layerX, e.layerY, function (origin) {
+                for (var i in eventedCallbacks.mousedown) {
+                    eventedCallbacks.mousedown[i](e, origin, e.layerX, e.layerY);
+                }
+            });
+        });
+        grid.addEventListener("mousemove", function (e) {
+            if (!eventedCallbacks.hasOwnProperty('mousemove')) {
+                return;
+            }
+            filterByCoord(e.layerX, e.layerY, function (origin) {
+                for (var i in eventedCallbacks.mousemove) {
+                    eventedCallbacks.mousemove[i](e, origin, e.layerX, e.layerY);
+                }
+            });
+        });
+
+        // Events --------------
+
+        eventedCallbacks.click = [
+            function (e, origin, x, y) {
+                ctx.fillStyle = "rgba(0, 50, 0, 0.2)";
+                ctx.strokeStyle = "rgb(50, 10, 10)";
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.stroke();
+                var data = origin.data;
+                ctx.fillRect(data.x, data.y, data.width, data.height);
+            }
+        ];
+
+        eventedCallbacks.mousemove = [
+            function (e, origin, x, y) {
+                ctx.fillStyle = "rgba(10, 0, 0, 0.01)";
+                var data = origin.data;
+                if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
+                    ctx.fillRect(data.x, data.y, data.width, data.height);
+                }
+                ctx.strokeStyle = "rgba(50, 10, 10, 0.3)";
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        ];
+
         $('.add').click(addNewItem);
         $('.addn').click(addNewItems);
         $('.redraw').click(function () {
@@ -440,6 +557,24 @@ $(document).ready(
             animationOn = !animationOn;
             window.requestAnimationFrame(animate);
         });
+        // scroll
+        window.scrollCallback = function (dx, dy) {
+            $('span.debugg').text('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
+            console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
+            var wasAnimation = animationOn;
+            animationOn = false;
+            while(animationNow) {
+                console.log('interlocked!');
+            }
+            eachOrigin(function (origin) {
+                var data = origin.data;
+                data.y += dy;
+                data.x += dx;
+            });
+            viewCenterX += dx;
+            viewCenterY += dy;
+            animationOn = wasAnimation;
+        };
 
         // debug -----------
         if (debugGreed) {
@@ -448,16 +583,7 @@ $(document).ready(
         if (debugPolar) {
             drawPolar();
         }
-        //var image = new Image();
-        //image.addEventListener('load', function () {
-        //    drawImage(image,
-        //        contextWidth / 2,
-        //        contextHeight / 2,
-        //        300,
-        //        50
-        //    );
-        //}, false);
-        //image.src = '/gallery/55cc61805e93d.jpg';
+
     }
 );
 
