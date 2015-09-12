@@ -12,22 +12,103 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 80,//px per block (width and height)
+            scale                        = 40,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
             viewCenterY                  = contextHeight / 2,
-            debugGreed                   = true,
+            debugGreed                   = false,
             debugPolar                   = false,
             debugHighlightHole           = false,
             debugCropImage               = false,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             duplicateHoleSize            = [[1, 1],],//w x h
             duplicateSquareSize          = [[2, 2], [1, 1],],
-            epsilonCaltulationFromRadius = function (r) {
+
+            info                         = {//pinned only, not duplicates
+                left:       0,
+                right:      0,
+                top:        0,
+                bottom:     0,
+                radius:     0,
+                radius2:    0,
+                itemsCount: 0,
+            },
+            recalculateInfo              = function () {
+                var left       = 0, right = 0, top = 0, bottom = 0,
+                    maxRadius2 = 0, radius = 0, itemsCount = 0;
+                var find = function () {
+                    // находим максимальный радиус
+                    eachOrigin(function (origin) {
+                        var x = origin.data.positionOnMap.x,
+                            y = origin.data.positionOnMap.y,
+                            t = x;
+                        if (!origin.pinned) {
+                            return;
+                        }
+                        itemsCount++;
+                        var r = x * x + y * y;
+                        if (r > maxRadius2) {
+                            maxRadius2 = r;
+                        }
+                        x += transformToMap(origin.data.width);
+                        r = x * x + y * y;
+                        if (r > maxRadius2) {
+                            maxRadius2 = r;
+                        }
+                        y += transformToMap(origin.data.height);
+                        r = t * t + y * y;
+                        if (r > maxRadius2) {
+                            maxRadius2 = r;
+                        }
+                        r = x * x + y * y;
+                        if (r > maxRadius2) {
+                            maxRadius2 = r;
+                        }
+                    });
+                    radius = Math.ceil(Math.sqrt(maxRadius2));
+                    var i,
+                        j;
+                    left = radius;
+                    right = -radius;
+                    top = radius;
+                    bottom = -radius;
+                    for (i = -radius; i <= radius; i++) {
+                        for (j = -radius; j <= radius; j++) {
+                            //делаем квадрат
+                            if (hasItem(i, j)) {
+                                if (i < left) {
+                                    left = i;
+                                }
+                                if (i > right) {
+                                    right = i;
+                                }
+                                if (j < top) {
+                                    top = j;
+                                }
+                                if (j > bottom) {
+                                    bottom = j;
+                                }
+                            }
+                        }
+                    }
+                    right++;
+                    bottom++;
+                };
+                find();
+
+                info.left = left;
+                info.right = right;
+                info.top = top;
+                info.bottom = bottom;
+                info.radius = radius;
+                info.radius2 = maxRadius2;
+                info.itemsCount = itemsCount;
+            },
+            epsilonCalculationFromRadius = function (r) {
                 return 180 * Math.asin(1 / r) / 2.01 / Math.PI;// 1/Math.sin(epsilon  / (180 / Math.PI /2.01)) ==== radius
             },
-            epsilon                      = epsilonCaltulationFromRadius(maximumRadius),
+            epsilon                      = epsilonCalculationFromRadius(maximumRadius),
             drawGreed                    = function () {
                 var verticalLine   = function (x) {
                         ctx.moveTo(x, 0);
@@ -152,7 +233,7 @@ $(document).ready(
                         if (r === 1) {
                             dphi = 60;
                         } else {
-                            dphi = epsilonCaltulationFromRadius(r);
+                            dphi = epsilonCalculationFromRadius(r);
                         }
                         if (r > maximumRadius) {
                             throw 'Limit exceeds';
@@ -204,14 +285,25 @@ $(document).ready(
             hasItem                      = function (x, y) {
                 return gridMap.hasOwnProperty(x) && gridMap[x].hasOwnProperty(y);
             },
-            setNewOrigin                 = function (x, y, width, height, additionalData) {
-                for (var i = x; i < x + width; i++) {//todo: delete duplicates
-                    for (var j = y; j < y + height; j++) {
+            setNewOrigin                 = function (x, y, additionalData, isDuplicate) {
+                var newOrigin = {data: additionalData};
+                newOrigin.duplicate = !!isDuplicate;
+                newOrigin.pinned = !isDuplicate;
+                for (var i = x; i < x + transformToMap(additionalData.width); i++) {
+                    for (var j = y; j < y + transformToMap(additionalData.height); j++) {
                         if (gridMap.hasOwnProperty(i)) {
-                            gridMap[i][j] = {pinned: true, data: additionalData};
+                            if (gridMap[i][j] && gridMap[i][j].duplicate) {
+                                var duplicateData = gridMap[i][j].data;
+                                eachOrigin(function (origin, remX, remY) {
+                                    if (origin.data === duplicateData) {
+                                        delete gridMap[remX][remY];
+                                    }
+                                }, true);
+                            }
+                            gridMap[i][j] = newOrigin;
                         } else {
                             gridMap[i] = {};
-                            gridMap[i][j] = {pinned: true, data: additionalData};
+                            gridMap[i][j] = newOrigin;
                         }
                     }
                 }
@@ -221,49 +313,18 @@ $(document).ready(
                 for (var x in gridMap) {
                     for (var y in gridMap[x]) {
                         if (all || processed.indexOf(gridMap[x][y].data) === -1) {
-                            cb(gridMap[x][y]);
                             processed.push(gridMap[x][y].data);
+                            cb(gridMap[x][y], x, y);
                         }
                     }
                 }
             },
             hideHoles                    = function () {
-                var left, right, top, bottom,
-                    maxRadius2 = 0;
+                recalculateInfo();
                 var find = function () {
                     //функция поиска дыр на карте
-                    var res        = [],
-                        willSquare = [],
-                        itemsCount = 0;
-                    // находим максимальный радиус
-                    eachOrigin(function (origin) {
-                        var x = origin.data.positionOnMap.x,
-                            y = origin.data.positionOnMap.y,
-                            t = x;
-                        if (!origin.pinned) {
-                            return;
-                        }
-                        itemsCount++;
-                        var r = x * x + y * y;
-                        if (r > maxRadius2) {
-                            maxRadius2 = r;
-                        }
-                        x += transformToMap(origin.data.width);
-                        r = x * x + y * y;
-                        if (r > maxRadius2) {
-                            maxRadius2 = r;
-                        }
-                        y += transformToMap(origin.data.height);
-                        r = t * t + y * y;
-                        if (r > maxRadius2) {
-                            maxRadius2 = r;
-                        }
-                        r = x * x + y * y;
-                        if (r > maxRadius2) {
-                            maxRadius2 = r;
-                        }
-                    });
-                    if (maxRadius2 < 8 || itemsCount < 4) {
+                    var res        = [];
+                    if (info.radius2 < 8 || info.itemsCount < 4) {
                         return [];//дыр тоже нет
                     }
                     if (debugHighlightHole) {
@@ -271,37 +332,11 @@ $(document).ready(
                         ctx.lineDashOffset = 0;
                         ctx.setLineDash([]);
                         ctx.beginPath();
-                        ctx.arc(viewCenterX, viewCenterY, transformFromMap(Math.sqrt(maxRadius2)), 0, Math.PI * 2);
+                        ctx.arc(viewCenterX, viewCenterY, transformFromMap(Math.sqrt(info.radius2)), 0, Math.PI * 2);
                         ctx.stroke();
                     }
-                    var radius = Math.ceil(Math.sqrt(maxRadius2)),
-                        i,
+                    var i,
                         j;
-                    left = radius;
-                    right = -radius;
-                    top = radius;
-                    bottom = -radius;
-                    for (i = -radius; i <= radius; i++) {
-                        for (j = -radius; j <= radius; j++) {
-                            //делаем квадрат
-                            if (hasItem(i, j)) {
-                                if (i < left) {
-                                    left = i;
-                                }
-                                if (i > right) {
-                                    right = i;
-                                }
-                                if (j < top) {
-                                    top = j;
-                                }
-                                if (j > bottom) {
-                                    bottom = j;
-                                }
-                            }
-                        }
-                    }
-                    right++;
-                    bottom++;
                     //фильтруем от пустоты без соседей
                     var checkMask        = {},
                         inCheckMask      = function (x, y) {
@@ -309,7 +344,7 @@ $(document).ready(
                         },
                         searchHole       = function (x, y) {
                             checkMask[x + ',' + y] = true;
-                            if (x * x + y * y > maxRadius2) {
+                            if (x * x + y * y > info.radius2) {
                                 return false;//not a closed hole
                             }
                             if (hasItem(x, y) && gridMap[x][y].pinned) {
@@ -331,9 +366,9 @@ $(document).ready(
                                 && searchHole(x, y + 1);
                         };
 
-                    for (i = left; i < right; i++) {
-                        for (j = top; j < bottom; j++) {
-                            if ((i + .5) * (i + .5) + (j + .5) * (j + .5) < maxRadius2//карйние элементы не считаются дырявыми
+                    for (i = info.left; i < info.right; i++) {
+                        for (j = info.top; j < info.bottom; j++) {
+                            if ((i + .5) * (i + .5) + (j + .5) * (j + .5) < info.radius2//карйние элементы не считаются дырявыми
                                 && (!hasItem(i, j) || !gridMap[i][j].pinned)) {//ищем соседей (не дубли, а реальные)
                                 var hole = {x: i, y: j};
                                 hole.real = !!isEmptyPointHole(hole);
@@ -383,28 +418,45 @@ $(document).ready(
                     }
                 }
                 var findForDuplicating = function (newX, newY, dontLookAtUsed) {
-                        var check = function (x, y) {
+                    // в этой функции мы ищем элементы которые будем дублировать
+                        var check = function (x, y) {//подходит ли элемент для дублирования
                             return hasItem(x, y) && gridMap[x][y].pinned
                                 && (dontLookAtUsed || usedDatas.indexOf(gridMap[x][y].data) === -1);
                         };
-                        if (dontLookAtUsed) {
-                            var i = (right - left) * (bottom - top);
+                        if (dontLookAtUsed) {//чистый рандом, уже всё равно
+                            var i = (info.right - info.left) * (info.bottom - info.top);
                             while (i--) {
-                                var a = random(left, right),
-                                    b = random(top, bottom);
+                                var a = random(info.left, info.right),
+                                    b = random(info.top, info.bottom);
                                 if (check(a, b)) {
                                     return gridMap[a][b];
                                 }
 
                             }
                         }
-                        for (var i = left; i < right; i++) {
-                            for (var j = top; j < bottom; j++) {
+                        for (var i = info.left; i < info.right; i++) {//любой подходящий
+                            for (var j = info.top; j < info.bottom; j++) {
                                 if (check(i, j)) {
                                     return gridMap[i][j];
                                 }
                             }
                         }
+                    },
+                    debugDrawDuplicate = function(x, y, w, h, originalOrigin) {
+                        ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                        ctx.fillRect(x, y, w, h);
+                        ctx.beginPath();
+                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = 'rgba(255, 50, 0, 0.7)';
+                        ctx.rect(x, y, w, h);
+                        ctx.stroke();
+                        ctx.font = "20px Georgia";
+                        ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+                        ctx.fillText(
+                            '' + originalOrigin.data.positionOnMap.x + ', ' + originalOrigin.data.positionOnMap.y,
+                            x,
+                            y + 20
+                        );
                     },
                     createDuplicate    = function (origin, newX, newY, sizes) {
                         if (!gridMap.hasOwnProperty(newX)) {
@@ -417,7 +469,7 @@ $(document).ready(
                             var newWidth  = sizes[sizeKey][0],
                                 newHeight = sizes[sizeKey][1],
                                 canInsert = true;
-                            if (newWidth > right - newX || newHeight > bottom - newY) {
+                            if (newWidth > info.right - newX || newHeight > info.bottom - newY) {
                                 continue;
                             }
                             for (var i = 0; i < newWidth; i++) {
@@ -433,47 +485,20 @@ $(document).ready(
                             }
                             if (debugHighlightHole) {
                                 // в отладке не создаём дубликат
-                                ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
-                                ctx.fillRect(
+                                debugDrawDuplicate(
                                     viewCenterX + transformFromMap(newX),
                                     viewCenterY + transformFromMap(newY),
                                     scale * newWidth,
-                                    scale * newHeight
-                                );
-                                ctx.beginPath();
-                                ctx.lineWidth = 1;
-                                ctx.strokeStyle = 'rgba(255, 50, 0, 0.7)';
-                                ctx.rect(
-                                    viewCenterX + transformFromMap(newX),
-                                    viewCenterY + transformFromMap(newY),
-                                    scale * newWidth,
-                                    scale * newHeight
-                                );
-                                ctx.stroke();
-                                ctx.font = "20px Georgia";
-                                ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
-                                ctx.fillText(
-                                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
-                                    viewCenterX + transformFromMap(newX),
-                                    viewCenterY + transformFromMap(newY) + 20
+                                    scale * newHeight,
+                                    origin
                                 );
                             } else {
                                 // создаём дубликат, и помещаем его в сетку
-                                var data = createData(undefined, {
+                                var data = createData(origin.data.imageSrc, {
                                     x: newX,
                                     y: newY
-                                }, origin.data.color, scale * newWidth, scale * newHeight);
-
-                                gridMap[newX][newY] = {pinned: false, duplicate: true, data: data};
-                                if (origin.data.imageSrc) {
-                                    data.image = new Image();
-                                    data.imageSrc = origin.data.imageSrc;
-                                    data.image.addEventListener('load', function () {
-                                        initImage(data);
-                                        drawImage(data);
-                                    }, false);
-                                    data.image.src = data.imageSrc;
-                                }
+                                }, origin.data.color, scale * newWidth, scale * newHeight, true);
+                                setNewOrigin(newX, newY, data, true);
                             }
                             return sizes[sizeKey];
                         }
@@ -568,7 +593,7 @@ $(document).ready(
                     data.imageState.scale = 1;
                 }
             },
-            createData                   = function (image, pos, color, width, height) {
+            createData                   = function (image, pos, color, width, height, dontCallOnLoad) {
                 var img = image ? (new Image()) : false,
                     res = {
                         imageSrc:       image,//src
@@ -602,7 +627,9 @@ $(document).ready(
                             img.addEventListener('load', function () {
                                 initImage(res);
                                 drawImage(res);
-                                onLoaded(res);
+                                if (!dontCallOnLoad) {
+                                    onLoaded(res);
+                                }
                             }, false);
                         }
                     };
@@ -689,7 +716,7 @@ $(document).ready(
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
                 var image = new Image(),
                     data  = createData('/' + img(), pos, ctx.fillStyle, width, height);
-                setNewOrigin(pos.x, pos.y, transformToMap(width), transformToMap(height), data);
+                setNewOrigin(pos.x, pos.y, data);
                 ctx.fillRect(
                     data.x,
                     data.y,
