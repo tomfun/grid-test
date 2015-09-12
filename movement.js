@@ -85,9 +85,11 @@ $(document).ready(function ($) {
             xpos = prevXPos = mouseDown = false;
             move($this, settings);
         } else {
+            mouseDown = false;
             console.log(xpos && prevXPos && settings.decelerate, xpos , prevXPos , settings.decelerate)
         }
     };
+    window.stopScrollImmediate = end;
     var inputmove = function (clientX, clientY) {
         if (!lastMove || new Date() > new Date(lastMove.getTime() + throttleTimeout)) {
             lastMove = new Date();

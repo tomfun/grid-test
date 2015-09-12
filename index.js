@@ -34,6 +34,7 @@ $(document).ready(
                 radius2:    0,
                 itemsCount: 0,
             },
+            usedDuplicates               = [],
             recalculateInfo              = function () {
                 var left       = 0, right = 0, top = 0, bottom = 0,
                     maxRadius2 = 0, radius = 0, itemsCount = 0;
@@ -293,7 +294,11 @@ $(document).ready(
                     for (var j = y; j < y + transformToMap(additionalData.height); j++) {
                         if (gridMap.hasOwnProperty(i)) {
                             if (gridMap[i][j] && gridMap[i][j].duplicate) {
-                                var duplicateData = gridMap[i][j].data;
+                                var duplicateData = gridMap[i][j].data,
+                                    usedDuplicatesIndex;
+                                if ((usedDuplicatesIndex = usedDuplicates.indexOf(duplicateData)) !== -1) {
+                                    usedDuplicates.splice(usedDuplicatesIndex, 1);
+                                }
                                 eachOrigin(function (origin, remX, remY) {
                                     if (origin.data === duplicateData) {
                                         delete gridMap[remX][remY];
@@ -323,7 +328,7 @@ $(document).ready(
                 recalculateInfo();
                 var find = function () {
                     //функция поиска дыр на карте
-                    var res        = [];
+                    var res = [];
                     if (info.radius2 < 8 || info.itemsCount < 4) {
                         return [];//дыр тоже нет
                     }
@@ -392,8 +397,8 @@ $(document).ready(
                     return res;
                 };
 
-                var holes     = find(),
-                    usedDatas = [],
+                var holes = find(),
+                    //usedDuplicates = [],
                     holeKey;
                 if (debugHighlightHole) {
                     for (holeKey in holes) {
@@ -418,12 +423,13 @@ $(document).ready(
                     }
                 }
                 var findForDuplicating = function (newX, newY, dontLookAtUsed) {
-                    // в этой функции мы ищем элементы которые будем дублировать
+                        // в этой функции мы ищем элементы которые будем дублировать
                         var check = function (x, y) {//подходит ли элемент для дублирования
                             return hasItem(x, y) && gridMap[x][y].pinned
-                                && (dontLookAtUsed || usedDatas.indexOf(gridMap[x][y].data) === -1);
+                                && (dontLookAtUsed || usedDuplicates.indexOf(gridMap[x][y].data) === -1);
                         };
                         if (dontLookAtUsed) {//чистый рандом, уже всё равно
+                            console.log('random')
                             var i = (info.right - info.left) * (info.bottom - info.top);
                             while (i--) {
                                 var a = random(info.left, info.right),
@@ -442,7 +448,7 @@ $(document).ready(
                             }
                         }
                     },
-                    debugDrawDuplicate = function(x, y, w, h, originalOrigin) {
+                    debugDrawDuplicate = function (x, y, w, h, originalOrigin) {
                         ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
                         ctx.fillRect(x, y, w, h);
                         ctx.beginPath();
@@ -517,7 +523,7 @@ $(document).ready(
                         if (replace) {
                             var insertedSize = createDuplicate(replace, x, y, sizes);
                             if (insertedSize) {
-                                usedDatas.push(replace.data);//стараемся не использовать теже карточки для дубликатов
+                                usedDuplicates.push(replace.data);//стараемся не использовать теже карточки для дубликатов
                                 for (var i = x; i < x + insertedSize[0]; i++) {
                                     for (var j = y; j < y + insertedSize[1]; j++) {
                                         for (var filledHoleKey in holes) {
@@ -686,12 +692,12 @@ $(document).ready(
                     height    = scale,
                     pos;
                 ctx.fillStyle = color();
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
+                if (trueFalse()) {
+                    height *= 2;
+                }
+                if (trueFalse()) {
+                    height *= 2;
+                }
                 if (trueFalse()) {
                     width *= 2;
                 }
@@ -819,7 +825,7 @@ $(document).ready(
                             if (data.imageState.move === 'bottom') {
                                 var maxY = data.getImage().height - data.imageState.clipH;
                                 if (data.imageState.y < maxY) {
-                                    data.imageState.y+= diff;
+                                    data.imageState.y += diff;
                                     if (data.imageState.y > maxY) {
                                         data.imageState.y = maxY;
                                     }
@@ -877,6 +883,7 @@ $(document).ready(
 
         grid.addEventListener("mouseout", function (e) {
             console.log('out', e);
+            window.stopScrollImmediate();
         });
 
         grid.addEventListener("click", function (e) {
