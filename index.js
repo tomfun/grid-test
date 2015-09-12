@@ -534,19 +534,8 @@ $(document).ready(
                                 }
                             }
                         }
-                        //for (var i = 0; i < 8; i++) {
-                        //    var j = -x;
-                        //    if (createDuplicate(y + i, j, x, y, sizes)
-                        //        || createDuplicate(-(y + i), -j, x, y, sizes)
-                        //        || createDuplicate(y + i, j + 1, x, y, sizes)
-                        //        || createDuplicate(-(y + i), -j - 1, x, y, sizes)
-                        //    ) {
-                        //        break;
-                        //    }
-                        //}//todo remove
                     }
                 }
-                window.huyy = hideHoles
             },
             random                       = function (min, max) {
                 return min + Math.round(Math.random() * (max - min));
@@ -697,12 +686,12 @@ $(document).ready(
                     height    = scale,
                     pos;
                 ctx.fillStyle = color();
-                if (trueFalse()) {
-                    height *= 2;
-                }
-                if (trueFalse()) {
-                    height *= 2;
-                }
+                //if (trueFalse()) {
+                //    height *= 2;
+                //}
+                //if (trueFalse()) {
+                //    height *= 2;
+                //}
                 if (trueFalse()) {
                     width *= 2;
                 }
@@ -805,10 +794,11 @@ $(document).ready(
                                 continue;//todo: draw old state
                             }
                             if (data.imageState.move === 'right') {
-                                if (data.imageState.x < data.getImage().width - data.imageState.clipW) {
+                                var maxX = data.getImage().width - data.imageState.clipW;
+                                if (data.imageState.x < maxX) {
                                     data.imageState.x += diff;
-                                    if (data.imageState.x > data.getImage().width - data.imageState.clipW) {
-                                        data.imageState.x = data.getImage().width - data.imageState.clipW;
+                                    if (data.imageState.x > maxX) {
+                                        data.imageState.x = maxX;
                                     }
                                 } else {
                                     data.imageState.move = 'left';
@@ -827,15 +817,22 @@ $(document).ready(
 
 
                             if (data.imageState.move === 'bottom') {
-                                if (data.imageState.y < data.getImage().height - data.imageState.clipH) {
-                                    data.imageState.y++;
+                                var maxY = data.getImage().height - data.imageState.clipH;
+                                if (data.imageState.y < maxY) {
+                                    data.imageState.y+= diff;
+                                    if (data.imageState.y > maxY) {
+                                        data.imageState.y = maxY;
+                                    }
                                 } else {
                                     data.imageState.move = 'top';
                                 }
                             }
                             if (data.imageState.move === 'top') {
                                 if (data.imageState.y > 0) {
-                                    data.imageState.y--;
+                                    data.imageState.y -= diff;
+                                    if (data.imageState.y < 0) {
+                                        data.imageState.y = 0;
+                                    }
                                 } else {
                                     data.imageState.move = 'bottom';
                                 }
