@@ -12,7 +12,7 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 40,//px per block (width and height)
+            scale                        = 200,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
@@ -728,19 +728,46 @@ $(document).ready(
                 for (var faker = 0; faker < 10; faker++) {
                     addNewItem();
                 }
+            },
+            mirroredData                 = function (data, cb) {
+                var boxWidth  = info.right - info.left,
+                    boxHeight = info.bottom - info.top,
+                    inArea    = function (p, size, viewSize) {
+                        var t1 = p,
+                            t2 = p + size;
+                        return (t1 >= 0 && t1 <= viewSize) || (t2 >= 0 && t2 <= viewSize);
+                    };
+                boxWidth = transformFromMap(boxWidth);
+                boxHeight = transformFromMap(boxHeight);
+                var wasX = data.x,
+                    wasY = data.y;
+                data.x = data.x % boxWidth - boxWidth;
+                for (; data.x < contextWidth; data.x += boxWidth) {
+                    data.y = wasY % boxHeight - boxHeight;
+                    for (; data.y < contextHeight; data.y += boxHeight) {
+                        if (inArea(data.x, data.width, contextWidth) && inArea(data.y, data.height, contextHeight)) {
+                            cb(data, wasX, wasY, boxWidth, boxHeight);
+                        }
+                    }
+                }
+                data.x = wasX;
+                data.y = wasY;
             };
         var drawItem       = function (data) {
-                if (data.getImage() && data.imageState) {
-                    drawImage(data);
-                } else {
-                    ctx.fillStyle = data.color;
-                    ctx.fillRect(
-                        data.x,
-                        data.y,
-                        data.width,
-                        data.height
-                    );
-                }
+                var realDraw = function (data) {
+                    if (data.getImage() && data.imageState) {
+                        drawImage(data);
+                    } else {
+                        ctx.fillStyle = data.color;
+                        ctx.fillRect(
+                            data.x,
+                            data.y,
+                            data.width,
+                            data.height
+                        );
+                    }
+                };
+                mirroredData(data, realDraw);
             },
             redrawItems    = function (filter) {
                 ctx.clearRect(0, 0, contextWidth, contextHeight);
@@ -795,7 +822,7 @@ $(document).ready(
                             }
                             oldTime = data.imageState.animationState;
                             diff = Math.round((time - oldTime) * animationSpeed / 1000);
-                            if (diff <= 0) {
+                            if (diff <= 0.5) {
                                 drawItem(data);//todo
                                 continue;//todo: draw old state
                             }
@@ -946,7 +973,8 @@ $(document).ready(
                 ctx.font = "20px Georgia";
                 ctx.fillStyle = 'rgba(200, 100, 255, 0.3)';
                 ctx.fillText(
-                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
+                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y
+                    + ';' + origin.data.width / scale + 'x' + origin.data.height / scale,
                     viewCenterX + transformFromMap(origin.data.positionOnMap.x),
                     viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 20
                 );
@@ -972,14 +1000,22 @@ $(document).ready(
             while (animationNow) {
                 console.log('interlocked!');
             }
-            eachOrigin(function (origin) {
-                var data = origin.data;
-                data.y += dy;
-                data.x += dx;
-            });
             viewCenterX += dx;
             viewCenterY += dy;
+            var boxWidth  = info.right - info.left,
+                boxHeight = info.bottom - info.top;
+            boxWidth = transformFromMap(boxWidth);
+            boxHeight = transformFromMap(boxHeight);
+            viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) % boxWidth;
+            viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) % boxHeight;
+
+            eachOrigin(function (origin) {
+                var data = origin.data;
+                data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
+                data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
+            });
             animationOn = wasAnimation;
+
         };
 
 // debug -----------

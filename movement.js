@@ -32,7 +32,7 @@ $(document).ready(function ($) {
         triggerHardware: false,
         y:               true,
         x:               true,
-        slowdown:        0.9,
+        slowdown:        0.96,
         animationDelay:  10,
         maxvelocity:     40,
         throttleFPS:     60,
