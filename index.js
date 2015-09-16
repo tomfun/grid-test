@@ -1,9 +1,11 @@
 $(document).ready(
     function () {
-        var grid    = document.getElementsByClassName('grid')[0],
+        var grid = document.getElementsByClassName('grid')[0];
+        grid.width = document.body.clientWidth - 30;
+        grid.height = document.body.clientHeight - 90;
+        var
             ctx     = grid.getContext('2d'),
             gridMap = {};
-
         ctx.fillStyle = "rgb(200,0,0)";
         ctx.fillRect(10, 10, 55, 50);
 
@@ -12,7 +14,7 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 200,//px per block (width and height)
+            scale                        = 80,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
@@ -21,6 +23,7 @@ $(document).ready(
             debugPolar                   = false,
             debugHighlightHole           = false,
             debugCropImage               = false,
+            mirroring                    = false,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             duplicateHoleSize            = [[1, 1],],//w x h
             duplicateSquareSize          = [[2, 2], [1, 1],],
@@ -426,10 +429,16 @@ $(document).ready(
                         // в этой функции мы ищем элементы которые будем дублировать
                         var check = function (x, y) {//подходит ли элемент для дублирования
                             return hasItem(x, y) && gridMap[x][y].pinned
+                                && (newX !== x && newY !== y)
+                                && (newX + 1 !== x && newY !== y)
+                                && (newX !== x && newY + 1 !== y)
+                                && (newX + 1 !== x && newY + 1 !== y)
+                                && (newX - 1 !== x && newY !== y)
+                                && (newX !== x && newY - 1 !== y)
+                                && (newX - 1 !== x && newY - 1 !== y)
                                 && (dontLookAtUsed || usedDuplicates.indexOf(gridMap[x][y].data) === -1);
                         };
                         if (dontLookAtUsed) {//чистый рандом, уже всё равно
-                            console.log('random')
                             var i = (info.right - info.left) * (info.bottom - info.top);
                             while (i--) {
                                 var a = random(info.left, info.right),
@@ -692,22 +701,22 @@ $(document).ready(
                     height    = scale,
                     pos;
                 ctx.fillStyle = color();
-                if (trueFalse()) {
-                    height *= 2;
-                }
-                if (trueFalse()) {
-                    height *= 2;
-                }
-                if (trueFalse()) {
-                    width *= 2;
-                }
-                if (trueFalse()) {
-                    width *= 2;
-                }
                 //if (trueFalse()) {
-                //    width *= 2;
                 //    height *= 2;
                 //}
+                //if (trueFalse()) {
+                //    height *= 2;
+                //}
+                //if (trueFalse()) {
+                //    width *= 2;
+                //}
+                //if (trueFalse()) {
+                //    width *= 2;
+                //}
+                if (trueFalse()) {
+                    width *= 2;
+                    height *= 2;
+                }
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
                 var image = new Image(),
                     data  = createData('/' + img(), pos, ctx.fillStyle, width, height);
@@ -730,6 +739,10 @@ $(document).ready(
                 }
             },
             mirroredData                 = function (data, cb) {
+                if (!mirroring) {
+                    cb(data, data.x, data.y, 0, 0);
+                    return;
+                }
                 var boxWidth  = info.right - info.left,
                     boxHeight = info.bottom - info.top,
                     inArea    = function (p, size, viewSize) {
@@ -973,10 +986,15 @@ $(document).ready(
                 ctx.font = "20px Georgia";
                 ctx.fillStyle = 'rgba(200, 100, 255, 0.3)';
                 ctx.fillText(
-                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y
-                    + ';' + origin.data.width / scale + 'x' + origin.data.height / scale,
+                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
                     viewCenterX + transformFromMap(origin.data.positionOnMap.x),
                     viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 20
+                );
+                ctx.fillText(
+                    "" + origin.data.width / scale + 'x' + origin.data.height / scale
+                    + (origin.duplicate ? ' d' : ''),
+                    viewCenterX + transformFromMap(origin.data.positionOnMap.x),
+                    viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 40
                 );
 
             }

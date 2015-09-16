@@ -1,5 +1,49 @@
 // --- copy paste https://github.com/tkahn/smoothTouchScroll/blob/master/js/source/jquery.kinetic.js
 $(document).ready(function ($) {
+    if (gyro.hasFeature('deviceorientation')) {//?!
+        $('span.debugg').text("deviceorientation is supported");
+    }
+    if (gyro.hasFeature('devicemotion'))//?!
+    {
+        $('span.debugg').text("devicemotion is supported");
+    }
+    var accCount = 0,
+        accX     = 0,
+        accY     = 0,
+        freezing = 0.8;
+    gyro.startTracking(function (eventData) {
+        // call our orientation event handler
+        accCount++;
+        var x = eventData.gamma;
+        //if (x < 0) {
+        //    x += 180;//x - угол, от 0 до 180, теперь
+        //}
+        var y = eventData.beta;//угол от -180 до +180
+        var factrorX = Math.abs(accX - x) / 10;//10 грудусов погрешность
+        if (factrorX < 1) {//если маленькая погрешность, углы медленно текут
+            factrorX = freezing;
+        } else {
+            factrorX = freezing / factrorX;//углы шустренько меняются
+        }
+        accX = accX * factrorX + x * (1 - factrorX);
+        var factrorY = Math.abs(accY - y) / 10;//10 грудусов погрешность
+        if (factrorY < 1) {//если маленькая погрешность, углы медленно текут
+            factrorY = freezing;
+        } else {
+            factrorY = freezing / factrorY;//углы шустренько меняются
+        }
+        accY = accY * factrorY + y * (1 - factrorY);
+        if (accCount === 1) {
+            gyro.calibrate();
+        } else {
+            $('span.debugg').text(
+                "DeviceOrientation: "
+                + ' (' + eventData.gamma.toFixed(1) + ',  ' + eventData.beta.toFixed(1) + ')'
+            );
+            $('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
+            $('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
+        }
+    });
 
     $(document).on("mousewheel", function (event) {
         start(10, 10);
@@ -32,8 +76,8 @@ $(document).ready(function ($) {
         triggerHardware: false,
         y:               true,
         x:               true,
-        slowdown:        0.96,
-        animationDelay:  10,
+        slowdown:        0.90,
+        animationDelay:  15,
         maxvelocity:     40,
         throttleFPS:     60,
     };
@@ -86,7 +130,7 @@ $(document).ready(function ($) {
             move($this, settings);
         } else {
             mouseDown = false;
-            console.log(xpos && prevXPos && settings.decelerate, xpos , prevXPos , settings.decelerate)
+            console.log(xpos && prevXPos && settings.decelerate, xpos, prevXPos, settings.decelerate)
         }
     };
     window.stopScrollImmediate = end;
@@ -232,14 +276,14 @@ $(document).ready(function ($) {
     var attachListeners = function ($this, settings) {
         var element = $this[0];
         //if ($.support.touch) {
-            $this.bind('touchstart', settings.events.touchStart)
-                .bind('touchend', settings.events.inputEnd)
-                .bind('touchmove', settings.events.touchMove);
+        $this.bind('touchstart', settings.events.touchStart)
+            .bind('touchend', settings.events.inputEnd)
+            .bind('touchmove', settings.events.touchMove);
         //} else {
-            $this
-                .mousedown(settings.events.inputDown)
-                .mouseup(settings.events.inputEnd)
-                .mousemove(settings.events.inputMove);
+        $this
+            .mousedown(settings.events.inputDown)
+            .mouseup(settings.events.inputEnd)
+            .mousemove(settings.events.inputMove);
         //}
         // doesn't need with canvas
         //$this
