@@ -923,7 +923,6 @@ $(document).ready(
 
         grid.addEventListener("mouseout", function (e) {
             console.log('out', e);
-            window.stopScrollImmediate();
         });
 
         grid.addEventListener("click", function (e) {

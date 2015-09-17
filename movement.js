@@ -1,73 +1,59 @@
 // --- copy paste https://github.com/tkahn/smoothTouchScroll/blob/master/js/source/jquery.kinetic.js
 $(document).ready(function ($) {
-    if (gyro.hasFeature('deviceorientation')) {//?!
+    if (gyro.hasFeature('deviceorientation')) {//машина поддерживает детект положение (повороты)
         $('span.debugg').text("deviceorientation is supported");
+        var accCount = 0,
+            accX     = 0,
+            accY     = 0,
+            freezing = 0.8;
+        gyro.startTracking(function (eventData) {
+            // call our orientation event handler
+            accCount++;
+            var x = eventData.gamma;
+            //if (x < 0) {
+            //    x += 180;//x - угол, от 0 до 180, теперь
+            //}
+            var y = eventData.beta;//угол от -180 до +180
+            var factrorX = Math.abs(accX - x) / 10;//10 грудусов погрешность
+            if (factrorX < 1) {//если маленькая погрешность, углы медленно текут
+                factrorX = freezing;
+            } else {
+                factrorX = freezing / factrorX;//углы шустренько меняются
+            }
+            accX = accX * factrorX + x * (1 - factrorX);
+            var factrorY = Math.abs(accY - y) / 10;//10 грудусов погрешность
+            if (factrorY < 1) {//если маленькая погрешность, углы медленно текут
+                factrorY = freezing;
+            } else {
+                factrorY = freezing / factrorY;//углы шустренько меняются
+            }
+            accY = accY * factrorY + y * (1 - factrorY);
+            if (accCount === 1) {
+                gyro.calibrate();
+            } else {
+                $('span.debugg').text(
+                    "DeviceOrientation: "
+                    + ' (' + eventData.gamma.toFixed(1) + ',  ' + eventData.beta.toFixed(1) + ')'
+                );
+                $('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
+                $('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
+            }
+        });
     }
-    if (gyro.hasFeature('devicemotion'))//?!
-    {
-        $('span.debugg').text("devicemotion is supported");
-    }
-    var accCount = 0,
-        accX     = 0,
-        accY     = 0,
-        freezing = 0.8;
-    gyro.startTracking(function (eventData) {
-        // call our orientation event handler
-        accCount++;
-        var x = eventData.gamma;
-        //if (x < 0) {
-        //    x += 180;//x - угол, от 0 до 180, теперь
-        //}
-        var y = eventData.beta;//угол от -180 до +180
-        var factrorX = Math.abs(accX - x) / 10;//10 грудусов погрешность
-        if (factrorX < 1) {//если маленькая погрешность, углы медленно текут
-            factrorX = freezing;
-        } else {
-            factrorX = freezing / factrorX;//углы шустренько меняются
-        }
-        accX = accX * factrorX + x * (1 - factrorX);
-        var factrorY = Math.abs(accY - y) / 10;//10 грудусов погрешность
-        if (factrorY < 1) {//если маленькая погрешность, углы медленно текут
-            factrorY = freezing;
-        } else {
-            factrorY = freezing / factrorY;//углы шустренько меняются
-        }
-        accY = accY * factrorY + y * (1 - factrorY);
-        if (accCount === 1) {
-            gyro.calibrate();
-        } else {
-            $('span.debugg').text(
-                "DeviceOrientation: "
-                + ' (' + eventData.gamma.toFixed(1) + ',  ' + eventData.beta.toFixed(1) + ')'
-            );
-            $('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
-            $('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
-        }
-    });
 
     $(document).on("mousewheel", function (event) {
         start(10, 10);
-        elementFocused = event.target;
         if (mouseDown) {
             inputmove(10 + event.deltaX * event.deltaFactor / 2, 10 + event.deltaY * event.deltaFactor / 2);
         }
 
         end();
-        elementFocused = null;
         // ---
         settings.decelerate = true;
         xpos = prevXPos = mouseDown = false;
-
-        //$('span.debugg').text('x: ' + event.deltaX + ', y: ' + event.deltaY + ', f: ' + event.deltaFactor);
-        //console.log('mousewheel', arguments);
     });
 
     var $this = $('.grid');
-
-    //var scrollCallback = function (dx, dy) {
-    //    $('span.debugg').text('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
-    //    console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
-    //};
 
 // ----
     var DEFAULT_SETTINGS = {
@@ -104,8 +90,7 @@ $(document).ready(function ($) {
         prevYPos        = false,
         mouseDown       = false,
         throttleTimeout = 1000 / settings.throttleFPS,
-        lastMove,
-        elementFocused;
+        lastMove;
 
     settings.velocity = 0;
     settings.velocityY = 0;
@@ -133,17 +118,11 @@ $(document).ready(function ($) {
             console.log(xpos && prevXPos && settings.decelerate, xpos, prevXPos, settings.decelerate)
         }
     };
-    window.stopScrollImmediate = end;
     var inputmove = function (clientX, clientY) {
         if (!lastMove || new Date() > new Date(lastMove.getTime() + throttleTimeout)) {
             lastMove = new Date();
 
             if (mouseDown && (xpos || ypos)) {
-                //if (elementFocused) {
-                //    $(elementFocused).blur();
-                //    elementFocused = null;
-                //    $this.focus();
-                //}
                 settings.decelerate = false;
                 settings.velocity = settings.velocityY = 0;
                 scrollCallback(clientX - xpos, clientY - ypos);
@@ -153,10 +132,6 @@ $(document).ready(function ($) {
                 ypos = clientY;
 
                 calculateVelocities();
-
-                //if (typeof settings.moved === 'function') {
-                //    settings.moved.call($this, settings);
-                //}
             }
         }
     };
@@ -164,9 +139,6 @@ $(document).ready(function ($) {
         settings.velocity = 0;
         settings.velocityY = 0;
         settings.decelerate = true;
-        //if (typeof settings.stopped === 'function') {
-        //    settings.stopped.call($scroller, settings);
-        //}
     };
     var decelerateVelocity = function (velocity, slowdown) {
         return Math.floor(Math.abs(velocity)) === 0 ? 0 // is velocity less than 1?
@@ -193,12 +165,6 @@ $(document).ready(function ($) {
         } else {
             settings.velocityY = 0;
         }
-
-        //setMoveClasses.call($scroller, settings, settings.deceleratingClass);
-
-        //if (typeof settings.moved === 'function') {
-        //    settings.moved.call($scroller, settings);
-        //}
         scrollCallback(dx, dy);
 
         if (Math.abs(settings.velocity) > 0 || Math.abs(settings.velocityY) > 0) {
@@ -230,67 +196,36 @@ $(document).ready(function ($) {
         },
         inputDown:  function (e) {
             start(e.clientX, e.clientY);
-            elementFocused = e.target;
-            //if (e.target.nodeName === 'IMG') {
-            //    e.preventDefault();
-            //}
-            //e.stopPropagation();
         },
         inputEnd:   function (e) {
             end();
-            elementFocused = null;
-            //if (e.preventDefault) {
-            //    e.preventDefault();
-            //}
         },
         inputMove:  function (e) {
             if (mouseDown) {
                 inputmove(e.clientX, e.clientY);
-                //if (e.preventDefault) {
-                //    e.preventDefault();
-                //}
             }
         },
         scroll:     function (e) {
-            //if (typeof settings.moved === 'function') {
-            //    settings.moved.call($this, settings);
-            //}
             if (e.preventDefault) {
                 e.preventDefault();
             }
         },
         inputClick: function (e) {
-            if (Math.abs(settings.velocity) > 0) {
-                e.preventDefault();
-                return false;
-            }
         },
         // prevent drag and drop images in ie
         dragStart:  function (e) {
-            if (elementFocused) {
-                return false;
-            }
         }
     };
 
     var attachListeners = function ($this, settings) {
         var element = $this[0];
-        //if ($.support.touch) {
         $this.bind('touchstart', settings.events.touchStart)
             .bind('touchend', settings.events.inputEnd)
             .bind('touchmove', settings.events.touchMove);
-        //} else {
         $this
             .mousedown(settings.events.inputDown)
             .mouseup(settings.events.inputEnd)
             .mousemove(settings.events.inputMove);
-        //}
-        // doesn't need with canvas
-        //$this
-        //    .click(settings.events.inputClick)
-        //    .scroll(settings.events.scroll)
-        //    .bind("selectstart", selectStart) // prevent selection when dragging
-        //    .bind('dragstart', settings.events.dragStart);
     };
     attachListeners($this, settings);
 
