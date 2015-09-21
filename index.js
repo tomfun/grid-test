@@ -1,8 +1,8 @@
 $(document).ready(
     function () {
         var grid = document.getElementsByClassName('grid')[0];
-        grid.width = document.body.clientWidth - 30;
-        grid.height = document.body.clientHeight - 90;
+        //grid.width = document.body.clientWidth - 30;
+        //grid.height = document.body.clientHeight - 90;
         var
             ctx     = grid.getContext('2d'),
             gridMap = {};
@@ -14,7 +14,7 @@ $(document).ready(
 
         // -------- constants & data
         var count                        = 0,
-            scale                        = 80,//px per block (width and height)
+            scale                        = 200,//px per block (width and height)
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
@@ -23,7 +23,8 @@ $(document).ready(
             debugPolar                   = false,
             debugHighlightHole           = false,
             debugCropImage               = false,
-            mirroring                    = false,
+            debugFPS                     = true,
+            mirroring                    = true,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             duplicateHoleSize            = [[1, 1],],//w x h
             duplicateSquareSize          = [[2, 2], [1, 1],],
@@ -797,16 +798,44 @@ $(document).ready(
                 }
             },
             animationOn    = false,
-            animationNow   = false,
             viewPortFilter = function (data) {
                 return true;
             },
             animationSpeed = 8, //px per second
+            scrollX        = 0,
+            scrollY        = 0,
+            realScroll     = function () {
+                if (!scrollX && !scrollY) {
+                    return;
+                }
+                viewCenterX += scrollX;
+                viewCenterY += scrollY;
+                scrollX = 0;
+                scrollY = 0;
+                var boxWidth  = info.right - info.left,
+                    boxHeight = info.bottom - info.top;
+                boxWidth = transformFromMap(boxWidth);
+                boxHeight = transformFromMap(boxHeight);
+                viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) % boxWidth;
+                viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) % boxHeight;
+
+                eachOrigin(function (origin) {
+                    var data = origin.data;
+                    data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
+                    data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
+                });
+            },
+            debugFps1       = 0,
+            debugFps2       = 0,
+            debugFps3       = 0,
             animate        = function () {
                 if (!animationOn) {
                     return;
                 }
-                animationNow = true;
+                if (debugFPS) {
+                    debugFps2++;
+                }
+                realScroll();
                 var drawed = [];
                 ctx.clearRect(0, 0, contextWidth, contextHeight);
                 for (var x in gridMap) {
@@ -890,8 +919,24 @@ $(document).ready(
                     }
                 }
                 onAnimationEnd();
-                animationNow = false;
-                window.requestAnimationFrame(animate);
+                if (debugFPS) {
+                    ctx.font = "72px Georgia";
+                    ctx.fillStyle = 'rgba(100, 100, 200, 1)';
+                    if (debugFps2 > 10) {
+                        debugFps1 = debugFps1 * 0.9 + 0.1 * (1000 / (new Date() - debugFps3)) * debugFps2;
+                        debugFps2 = 0;
+                        debugFps3 = new Date();
+                    }
+                    ctx.fillText(
+                        '' + debugFps1.toFixed(),
+                        0,
+                        72
+                    );
+
+                }
+                setTimeout(function () {
+                    window.requestAnimationFrame(animate);
+                }, 2);
                 //if ( !window.requestAnimationFrame ) {
                 //
                 //    window.requestAnimationFrame = ( function() {
@@ -1009,30 +1054,12 @@ $(document).ready(
             window.requestAnimationFrame(animate);
         });
 // scroll
+        var resize = function () {
+            //todo
+        };
         window.scrollCallback = function (dx, dy) {
-            $('span.debugg').text('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
-            //console.log('x: ' + dx.toFixed(2) + ', y: ' + dy.toFixed(2));
-            var wasAnimation = animationOn;
-            animationOn = false;
-            while (animationNow) {
-                console.log('interlocked!');
-            }
-            viewCenterX += dx;
-            viewCenterY += dy;
-            var boxWidth  = info.right - info.left,
-                boxHeight = info.bottom - info.top;
-            boxWidth = transformFromMap(boxWidth);
-            boxHeight = transformFromMap(boxHeight);
-            viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) % boxWidth;
-            viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) % boxHeight;
-
-            eachOrigin(function (origin) {
-                var data = origin.data;
-                data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
-                data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
-            });
-            animationOn = wasAnimation;
-
+            scrollX += dx;
+            scrollY += dy;
         };
 
 // debug -----------
@@ -1042,7 +1069,6 @@ $(document).ready(
         if (debugPolar) {
             drawPolar();
         }
-
     }
 )
 ;

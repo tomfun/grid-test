@@ -8,6 +8,9 @@ $(document).ready(function ($) {
             freezing = 0.8;
         gyro.startTracking(function (eventData) {
             // call our orientation event handler
+            if (eventData.gamma === null) {
+                gyro.stopTracking();
+            }
             accCount++;
             var x = eventData.gamma;
             //if (x < 0) {
@@ -31,151 +34,147 @@ $(document).ready(function ($) {
             if (accCount === 1) {
                 gyro.calibrate();
             } else {
-                $('span.debugg').text(
-                    "DeviceOrientation: "
-                    + ' (' + eventData.gamma.toFixed(1) + ',  ' + eventData.beta.toFixed(1) + ')'
-                );
-                $('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
-                $('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
+                //$('span.debugg').text(
+                //    "DeviceOrientation: "
+                //    + ' (' + eventData.gamma.toFixed(1) + ',  ' + eventData.beta.toFixed(1) + ')'
+                //);
+                //$('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
+                //$('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
+
+                //shift(accX - , accY - );
             }
         });
     }
-
-    $(document).on("mousewheel", function (event) {
-        start(10, 10);
-        if (mouseDown) {
-            inputmove(10 + event.deltaX * event.deltaFactor / 2, 10 + event.deltaY * event.deltaFactor / 2);
-        }
-
-        end();
-        // ---
-        settings.decelerate = true;
-        xpos = prevXPos = mouseDown = false;
-    });
-
     var $this = $('.grid');
 
-// ----
+    $this.on("mousewheel", function (event) {
+        event.preventDefault();
+        shift(event.deltaX * event.deltaFactor, event.deltaY * event.deltaFactor);
+    });
+
+
+// ---------------------------
+    Math.sign = Math.sign || function (x) {
+            x = +x; // преобразуем в число
+            if (x === 0 || isNaN(x)) {
+                return x;
+            }
+            return x > 0 ? 1 : -1;
+        };
+
     var DEFAULT_SETTINGS = {
-        cursor:          'move',
-        decelerate:      true,
-        triggerHardware: false,
-        y:               true,
-        x:               true,
-        slowdown:        0.90,
-        animationDelay:  15,
-        maxvelocity:     40,
-        throttleFPS:     60,
-    };
-    var selectStart = function () {
-        return false;
-    };
-    var capVelocity = function (velocity, max) {
-        var newVelocity = velocity;
-        if (velocity > 0) {
-            if (velocity > max) {
-                newVelocity = max;
-            }
-        } else {
-            if (velocity < (0 - max)) {
-                newVelocity = (0 - max);
-            }
-        }
-        return newVelocity;
+        cursor:             'move',
+        decelerateDistance: 0.03,
+        maxvelocity:        60,//max is = 4 * maxvelocity
+        speedDivide:        0.3,
+        speedPow:           1.1,
+        throttleFPS:        60,
+        movingNow:          false,
     };
     var settings        = $.extend({}, DEFAULT_SETTINGS),
-        xpos,
-        prevXPos        = false,
-        ypos,
-        prevYPos        = false,
-        mouseDown       = false,
+        xPos,
+        xPosEnd,
+        yPos,
+        yPosEnd,
+        mouseDown       = 0,
         throttleTimeout = 1000 / settings.throttleFPS,
+        lastMouseMove,
         lastMove;
-
     settings.velocity = 0;
-    settings.velocityY = 0;
 
-    var calculateVelocities = function () {
-        settings.velocity = capVelocity(prevXPos - xpos, settings.maxvelocity);
-        settings.velocityY = capVelocity(prevYPos - ypos, settings.maxvelocity);
-    };
     var start = function (clientX, clientY) {
-        mouseDown = true;
-        settings.velocity = prevXPos = 0;
-        settings.velocityY = prevYPos = 0;
-        xpos = clientX;
-        ypos = clientY;
+        settings.velocity = 0;
+        xPosEnd = xPos = clientX;
+        yPosEnd = yPos = clientY;
+        mouseDown++;
     };
     var end = function () {
-        if (xpos && prevXPos && settings.decelerate === false) {
-            // stop immediately
-            settings.decelerate = true;
-            calculateVelocities();
-            xpos = prevXPos = mouseDown = false;
-            move($this, settings);
-        } else {
-            mouseDown = false;
-            console.log(xpos && prevXPos && settings.decelerate, xpos, prevXPos, settings.decelerate)
-        }
+        mouseDown = 0;
+        xPosEnd = Math.round(xPosEnd + (xPosEnd - xPos) * settings.velocity * settings.decelerateDistance);
+        yPosEnd = Math.round(yPosEnd + (yPosEnd - yPos) * settings.velocity * settings.decelerateDistance);
     };
-    var inputmove = function (clientX, clientY) {
-        if (!lastMove || new Date() > new Date(lastMove.getTime() + throttleTimeout)) {
-            lastMove = new Date();
+    var shift     = function (dx, dy) {
+            if (!xPos && !xPosEnd || isNaN(xPos)) {
+                xPos = xPosEnd = 0;
+            }
+            if (!yPos && !yPosEnd || isNaN(yPos)) {
+                yPos = yPosEnd = 0;
+            }
+            xPosEnd += dx;
+            yPosEnd += dy;
+            moveOn(settings);
+            //scrollCallback(dx, dy);
+        },
+        inputmove = function (clientX, clientY) {
+            if (mouseDown) {
+                if (!lastMouseMove || new Date() > new Date(lastMouseMove.getTime() + throttleTimeout)) {
+                    lastMouseMove = new Date();
+                    shift(clientX - xPosEnd, clientY - yPosEnd);
+                }
+            }
+        };
+    var moveOn = function (settings) {
+            if (!settings.movingNow) {
+                settings.movingNow = true;
+                lastMove = new Date();
+                move(settings);
+            }
+        },
+        screw  = function (dx) {
+            var speed = Math.pow(dx, settings.speedPow) / settings.speedDivide,
+                now   = new Date(),
+                diff  = now - lastMove;
+            settings.velocity = diff * speed / 1000;
+            if (settings.velocity > (settings.maxvelocity * 4)) {
+                settings.velocity = settings.maxvelocity * 4;
+            }
+            lastMove = now;
+            if (settings.velocity > settings.maxvelocity) {
+                return settings.maxvelocity;
+            }
+            return settings.velocity;
+        },
+        validateApply = function (dr, r, m) {
+            var tmp = r * m;
+            //tmp = Math.sign(tmp) * Math.round(Math.abs(tmp));
+            if (Math.abs(tmp) < Math.abs(dr)) {
+                return tmp;
+            }
+            return dr;
+        };
+    var move = function () {
+        if (!settings.movingNow) {
+            return;
+        }
+        var now           = new Date(),
+            dx            = xPosEnd - xPos,
+            dy            = yPosEnd - yPos,
+            r             = dx * dx + dy * dy,
+            c             = Math.sign(dx) * Math.sqrt(dx * dx / r),
+            s             = Math.sign(dy) * Math.sqrt(dy * dy / r);
+        if (now > new Date(lastMove.getTime() + throttleTimeout)) {
 
-            if (mouseDown && (xpos || ypos)) {
-                settings.decelerate = false;
-                settings.velocity = settings.velocityY = 0;
-                scrollCallback(clientX - xpos, clientY - ypos);
-                prevXPos = xpos;
-                prevYPos = ypos;
-                xpos = clientX;
-                ypos = clientY;
-
-                calculateVelocities();
+            if (isFinite(r) && r > 0 && !isNaN(r)) {
+                r = screw(Math.sqrt(r));
+                dx = validateApply(dx, r, c);
+                dy = validateApply(dy, r, s);
+                var ddx = Math.round(xPos + dx) - Math.round(xPos),
+                    ddy = Math.round(yPos + dy) - Math.round(yPos);
+                xPos += dx;
+                yPos += dy;
+                if (ddx || ddy) {
+                    scrollCallback(ddx, ddy);
+                }
             }
         }
-    };
-    var stop = function ($scroller, settings) {
-        settings.velocity = 0;
-        settings.velocityY = 0;
-        settings.decelerate = true;
-    };
-    var decelerateVelocity = function (velocity, slowdown) {
-        return Math.floor(Math.abs(velocity)) === 0 ? 0 // is velocity less than 1?
-            : velocity * slowdown; // reduce slowdown
-    };
-    var move = function ($scroller, settings) {
-        var scroller = $scroller[0],
-            dx       = -settings.velocity,
-            dy       = -settings.velocityY;
-        if (settings.x && scroller.scrollWidth > 0) {
-            if (Math.abs(settings.velocity) > 0) {
-                settings.velocity = settings.decelerate ?
-                                    decelerateVelocity(settings.velocity, settings.slowdown) : settings.velocity;
-            }
+        if (Math.abs(xPosEnd - xPos) <= 0.6 && Math.abs(yPosEnd - yPos) <= 0.6) {
+            settings.movingNow = false;
         } else {
-            settings.velocity = 0;
+            var timeOut = Math.ceil(throttleTimeout - (new Date() - now));
+            setTimeout(move, timeOut);
         }
+    };
 
-        if (settings.y && scroller.scrollHeight > 0) {
-            if (Math.abs(settings.velocityY) > 0) {
-                settings.velocityY = settings.decelerate ?
-                                     decelerateVelocity(settings.velocityY, settings.slowdown) : settings.velocityY;
-            }
-        } else {
-            settings.velocityY = 0;
-        }
-        scrollCallback(dx, dy);
-
-        if (Math.abs(settings.velocity) > 0 || Math.abs(settings.velocityY) > 0) {
-            // tick for next movement
-            setTimeout(function () {
-                move($scroller, settings);
-            }, settings.animationDelay);
-        } else {
-            stop($scroller, settings);
-        }
-    };
 
     settings.events = {
         touchStart: function (e) {
@@ -186,35 +185,22 @@ $(document).ready(function ($) {
         },
         touchMove:  function (e) {
             var touch;
-            if (mouseDown) {
-                touch = e.originalEvent.touches[0];
-                inputmove(touch.clientX, touch.clientY);
-                if (e.preventDefault) {
-                    e.preventDefault();
-                }
+            touch = e.originalEvent.touches[0];
+            inputmove(touch.clientX, touch.clientY);
+            if (e.preventDefault) {
+                e.preventDefault();
             }
         },
         inputDown:  function (e) {
             start(e.clientX, e.clientY);
         },
         inputEnd:   function (e) {
+            inputmove(e.clientX, e.clientY);
             end();
         },
         inputMove:  function (e) {
-            if (mouseDown) {
-                inputmove(e.clientX, e.clientY);
-            }
+            inputmove(e.clientX, e.clientY);
         },
-        scroll:     function (e) {
-            if (e.preventDefault) {
-                e.preventDefault();
-            }
-        },
-        inputClick: function (e) {
-        },
-        // prevent drag and drop images in ie
-        dragStart:  function (e) {
-        }
     };
 
     var attachListeners = function ($this, settings) {
@@ -224,8 +210,9 @@ $(document).ready(function ($) {
             .bind('touchmove', settings.events.touchMove);
         $this
             .mousedown(settings.events.inputDown)
-            .mouseup(settings.events.inputEnd)
+            .mouseout(settings.events.inputEnd)
             .mousemove(settings.events.inputMove);
+        document.body.addEventListener('mouseup', settings.events.inputEnd);
     };
     attachListeners($this, settings);
 

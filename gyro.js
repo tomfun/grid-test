@@ -183,7 +183,7 @@
     // it doesn't make sense to depend on a "window" module
     // since deviceorientation & devicemotion make just sense in the browser
     // so old school test used.
-    if (window && window.addEventListener) {
+    if (typeof addEventListener === 'function' || window && window.addEventListener) {
         function setupListeners() {
             function MozOrientationInitListener (e) {
                 features.push('MozOrientation');
