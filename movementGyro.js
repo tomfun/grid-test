@@ -1,36 +1,17 @@
-// --- copy paste https://github.com/tkahn/smoothTouchScroll/blob/master/js/source/jquery.kinetic.js
 $(document).ready(function ($) {
     //if (gyro.hasFeature('deviceorientation')) {//машина поддерживает детект положение (повороты)
     //    $('span.debugg').text("deviceorientation is supported");
     var accCount          = 0,
         accX              = 0,
         accY              = 0,
+        maxAngle          = 45,
         freezing          = 0.90,
         lastX             = 0,
         lastY             = 0,
         gravityThreshold  = 30,
         gravityMultiplier = 0.5,
         multiplier        = 20,
-        frequency         = 200,
-        freezingShleyf    = 1;
-    var shleyfIndex = 0,
-        shleyfX,
-        shleyfY,
-        shleyf      = function () {
-            $('span.debugg21').text((shleyfX / freezingShleyf).toFixed(2)).css('color', '');
-            $('span.debugg22').text((shleyfY / freezingShleyf).toFixed(2)).css('color', '');
-            window.scrollHack(shleyfX / freezingShleyf, shleyfY / freezingShleyf);
-            if (shleyfIndex++ < freezingShleyf) {
-                setTimeout(shleyf, frequency / (freezingShleyf + 1));
-            } else {
-                shleyfIndex = 0;
-                shleyfX = 0;
-                shleyfY = 0;
-                //$('span.debugg').text(
-                //    "~~@#$%~~" + Math.random().toFixed(2)
-                //);
-            }
-        };
+        frequency         = 200;
     gyro.frequency = frequency;
     gyro.startTracking(function (eventData) {
         // call our orientation event handler
@@ -69,27 +50,40 @@ $(document).ready(function ($) {
             if (!window.scrollHack) {
                 return;//hack
             }
+            if (accX > maxAngle) {
+                accX = maxAngle;
+            }
+            if (accX < maxAngle) {
+                accX = -maxAngle;
+            }
+            if (accY > maxAngle) {
+                accY = maxAngle;
+            }
+            if (accY < maxAngle) {
+                accY = -maxAngle;
+            }
             var diffX = lastX - accX,
                 diffY = lastY - accY;
-            if (accX > gravityThreshold) {
-                diffX -= (accX - gravityThreshold) * gravityMultiplier;
+            if (gravityThreshold < maxAngle) {
+                if (accX > gravityThreshold) {
+                    diffX -= (accX - gravityThreshold) * gravityMultiplier;
+                }
+                if (accX < -gravityThreshold) {
+                    diffX -= (accX + gravityThreshold) * gravityMultiplier;
+                }
+                if (accY > gravityThreshold) {
+                    diffY -= (accY - gravityThreshold) * gravityMultiplier;
+                }
+                if (accY < -gravityThreshold) {
+                    diffY -= (accY + gravityThreshold) * gravityMultiplier;
+                }
             }
-            if (accX < -gravityThreshold) {
-                diffX -= (accX + gravityThreshold) * gravityMultiplier;
-            }
-            if (accY > gravityThreshold) {
-                diffY -= (accY - gravityThreshold) * gravityMultiplier;
-            }
-            if (accY < -gravityThreshold) {
-                diffY -= (accY + gravityThreshold) * gravityMultiplier;
-            }
-            shleyfX = diffX * multiplier;
-            shleyfY = diffY * multiplier;
-            shleyf();
+
+            window.scrollHack(diffX * multiplier, diffY * multiplier);
+
             lastX = accX;
             lastY = accY;
         }
     });
-    //}
 
 });

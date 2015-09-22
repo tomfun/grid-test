@@ -2,13 +2,6 @@
 $(document).ready(function ($) {
     var $this = $('.grid');
 
-    $this.on("mousewheel", function (event) {
-        event.preventDefault();
-        shift(event.deltaX * event.deltaFactor, event.deltaY * event.deltaFactor);
-    });
-
-
-// ---------------------------
     Math.sign = Math.sign || function (x) {
             x = +x; // преобразуем в число
             if (x === 0 || isNaN(x)) {
