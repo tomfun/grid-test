@@ -15,6 +15,7 @@ $(document).ready(
         // -------- constants & data
         var count                        = 0,
             scale                        = 200,//px per block (width and height)
+            zoom                         = 1,//zoom, используется для внутренних нужд
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
@@ -581,11 +582,15 @@ $(document).ready(
                     clipW: iWidth,
                     clipH: iHeight,
                     scale: scale,
-                    move:  false
+                    move:  false,
+                    zoom:  zoom,
                 };
             },
             cacheImage                   = function (data) {
-                if (!data.imageBuffer && data.image) {
+                if (!data.imageBuffer && data.imageState && data.imageState.zoom !== zoom) {
+                    initImage(data);
+                }
+                if (zoom === 1 && !data.imageBuffer && data.image) {
                     data.imageBuffer = document.createElement('canvas');
                     data.imageBuffer.width = data.image.width * data.imageState.scale;
                     data.imageBuffer.height = data.image.height * data.imageState.scale;
@@ -655,11 +660,11 @@ $(document).ready(
 
                 //  draw with resize & clip
                 //drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
-                cacheImage(data);
-                var image = data.imageBuffer;
-                if (!image) {
+                if (!data.imageState) {
                     return;
                 }
+                cacheImage(data);
+                var image = data.getImage();
                 if (debugCropImage) {
                     ctx.save();
                     ctx.globalAlpha = 0.3;
@@ -667,8 +672,8 @@ $(document).ready(
                         image,
                         data.x - data.imageState.x/* * data.imageState.scale*/,
                         data.y - data.imageState.y/* * data.imageState.scale*/,
-                        image.width/* * data.imageState.scale*/,
-                        image.height/* * data.imageState.scale*/
+                        data.getImageWidth()/* * data.imageState.scale*/,
+                        data.getImageHeight()/* * data.imageState.scale*/
                     );
                     ctx.globalAlpha = 0.9;
                 }
@@ -825,9 +830,9 @@ $(document).ready(
                     data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
                 });
             },
-            debugFps1       = 0,
-            debugFps2       = 0,
-            debugFps3       = 0,
+            debugFps1      = 0,
+            debugFps2      = 0,
+            debugFps3      = 0,
             animate        = function () {
                 if (!animationOn) {
                     return;
@@ -1054,15 +1059,28 @@ $(document).ready(
             window.requestAnimationFrame(animate);
         });
 // scroll
-        var resize = function () {
-            //todo
-        };
+        var resize      = function (newSize) {
+                if (newSize === zoom) {
+                    return;
+                }
+                var multiply = newSize / zoom;
+                scale *= multiply;
+                eachOrigin(function (origin, mapX, mapY) {
+                    var data = origin.data;
+                    data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
+                    data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
+                    data.width *= multiply;
+                    data.height *= multiply;
+                });
+                zoom = newSize;
+            };
         window.scrollCallback = function (dx, dy) {
             scrollX += dx;
             scrollY += dy;
         };
 
 // debug -----------
+        window.xxX = resize;//REMOVE
         if (debugGreed) {
             drawGreed();
         }
