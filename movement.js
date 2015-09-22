@@ -18,6 +18,7 @@ $(document).ready(function ($) {
         speedPow:           1.1,
         throttleFPS:        60,
         movingNow:          false,
+        halfPixelMoving:    1,//1 - off, 2 - 0.5px, 3 - 1/3px ...
     };
     var settings        = $.extend({}, DEFAULT_SETTINGS),
         xPos,
@@ -61,14 +62,14 @@ $(document).ready(function ($) {
                 }
             }
         };
-    var moveOn = function (settings) {
+    var moveOn        = function (settings) {
             if (!settings.movingNow) {
                 settings.movingNow = true;
                 lastMove = new Date();
                 move(settings);
             }
         },
-        screw  = function (dx) {
+        screw         = function (dx) {
             var speed = Math.pow(dx, settings.speedPow) / settings.speedDivide,
                 now   = new Date(),
                 diff  = now - lastMove;
@@ -94,20 +95,26 @@ $(document).ready(function ($) {
         if (!settings.movingNow) {
             return;
         }
-        var now           = new Date(),
-            dx            = xPosEnd - xPos,
-            dy            = yPosEnd - yPos,
-            r             = dx * dx + dy * dy,
-            c             = Math.sign(dx) * Math.sqrt(dx * dx / r),
-            s             = Math.sign(dy) * Math.sqrt(dy * dy / r);
+        var now = new Date(),
+            dx  = xPosEnd - xPos,
+            dy  = yPosEnd - yPos,
+            r   = dx * dx + dy * dy,
+            c   = Math.sign(dx) * Math.sqrt(dx * dx / r),
+            s   = Math.sign(dy) * Math.sqrt(dy * dy / r);
         if (now > new Date(lastMove.getTime() + throttleTimeout)) {
 
             if (isFinite(r) && r > 0 && !isNaN(r)) {
                 r = screw(Math.sqrt(r));
                 dx = validateApply(dx, r, c);
                 dy = validateApply(dy, r, s);
-                var ddx = Math.round(xPos + dx) - Math.round(xPos),
+                var ddx, ddy, accur = settings.halfPixelMoving;
+                if (settings.halfPixelMoving === 1) {
+                    ddx = Math.round(xPos + dx) - Math.round(xPos);
                     ddy = Math.round(yPos + dy) - Math.round(yPos);
+                } else {
+                    ddx = (Math.round((xPos + dx) * accur) - Math.round(xPos * accur)) / accur;
+                    ddy = (Math.round((yPos + dy) * accur) - Math.round(yPos * accur)) / accur;
+                }
                 xPos += dx;
                 yPos += dy;
                 if (ddx || ddy) {
