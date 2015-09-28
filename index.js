@@ -1058,22 +1058,24 @@ $(document).ready(
             animationOn = !animationOn;
             window.requestAnimationFrame(animate);
         });
-// scroll
-        var resize      = function (newSize) {
-                if (newSize === zoom) {
-                    return;
-                }
-                var multiply = newSize / zoom;
-                scale *= multiply;
-                eachOrigin(function (origin, mapX, mapY) {
-                    var data = origin.data;
-                    data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
-                    data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
-                    data.width *= multiply;
-                    data.height *= multiply;
-                });
-                zoom = newSize;
-            };
+        // zoom
+        var resize = function (newSize) {
+            if (newSize === zoom) {
+                return;
+            }
+            var multiply = newSize / zoom;
+            scale *= multiply;
+            viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) * multiply;
+            viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) * multiply;
+            eachOrigin(function (origin, mapX, mapY) {
+                var data = origin.data;
+                data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
+                data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
+                data.width *= multiply;
+                data.height *= multiply;
+            });
+            zoom = newSize;
+        };
         window.scrollCallback = function (dx, dy) {
             scrollX += dx;
             scrollY += dy;

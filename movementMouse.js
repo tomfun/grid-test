@@ -33,4 +33,52 @@ $(document).ready(function ($) {
             setInterval(scrollByMouse, 200);
         }
     });
+
+    //------------- Zoom ------------------
+    var state        = null,
+        centerX,
+        centerY,
+        curZoom      = 1,
+        zoomOutState = 0.94,
+        q            = 0.99,
+        movingStart  = function (newState) {
+            var wasState = state;
+            state = !!newState;
+            if (wasState === null) {
+                moving();
+            }
+        },
+        moving       = function () {
+            if (state === null) {
+                return;
+            }
+            if (state) {
+                if (Math.round((zoomOutState - curZoom) * 100) >= 0) {
+                    state = null;
+                    return;
+                }
+                curZoom *= q;
+            } else {
+                if (Math.round(curZoom * 100) >= 100) {
+                    state = null;
+                    return;
+                }
+                curZoom /= q;
+            }
+            window.xxX(curZoom);
+            setTimeout(function() {
+                window.requestAnimationFrame(moving);
+            }, 3);
+        };
+    $this.on('mousedown', function (e) {
+        centerX = e.clientX;
+        centerY = e.clientY;
+        movingStart(true);
+    });
+    $this.on('mouseup', function (e) {
+        movingStart();
+    });
+    $this.on('mouseout', function (e) {
+        movingStart();
+    });
 });
