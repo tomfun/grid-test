@@ -511,7 +511,7 @@ $(document).ready(
                                 );
                             } else {
                                 // создаём дубликат, и помещаем его в сетку
-                                var data = createData(origin.data.imageSrc, {
+                                var data = createData(origin.data.text, origin.data.imageSrc, {
                                     x: newX,
                                     y: newY
                                 }, origin.data.color, scale * newWidth, scale * newHeight, true);
@@ -603,9 +603,34 @@ $(document).ready(
                     data.imageState.scale = 1;
                 }
             },
-            createData                   = function (image, pos, color, width, height, dontCallOnLoad) {
+            cacheText                    = function (data) {
+                if (!data.textBuffer && data.text !== undefined || Math.abs(data.width - data.textBuffer.width) > 1) {
+                    if (data.textBuffer) {
+                        delete data.textBuffer;
+                    }
+                    data.textBuffer = document.createElement('canvas');
+                    data.textBuffer.width = data.width;
+                    data.textBuffer.height = data.height;
+                    var context = data.textBuffer.getContext('2d');
+                    context.font = '' + Math.round(scale * 0.12) + "px Georgia";
+                    context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    context.shadowColor = "rgba(0, 0, 0, 1)";
+                    context.shadowOffsetX = 0;
+                    context.shadowOffsetY = Math.round(scale * 0.01);
+                    context.shadowBlur = Math.round(scale * 0.05);
+                    //ctx.measureText(text).width
+                    context.fillText(
+                        '' + data.text,
+                        scale * 0.04,
+                        scale * 0.15
+                    );
+                }
+                return data.textBuffer;
+            },
+            createData                   = function (text, image, pos, color, width, height, dontCallOnLoad) {
                 var img = image ? (new Image()) : false,
                     res = {
+                        text:           text,
                         imageSrc:       image,//src
                         image:          img,
                         x:              transformFromMap(pos.x) + viewCenterX,
@@ -688,9 +713,24 @@ $(document).ready(
                     data.width,
                     data.height
                 );
+                if (data.imageState.hover) {
+                    ctx.fillStyle = data.color;
+                    ctx.fillRect(data.x, data.y, data.width, data.height);
+                }
                 if (debugCropImage) {
                     ctx.restore();
                 }
+            },
+            drawText                     = function (data) {
+                if (!data.text) {
+                    return;
+                }
+                var image = cacheText(data);
+                ctx.drawImage(
+                    image,
+                    data.x,
+                    data.y
+                );
             },
             addNewItem                   = function (ev) {
                 //ev.preventDefault();
@@ -725,7 +765,13 @@ $(document).ready(
                 }
                 pos = getNewOrigin(transformToMap(width), transformToMap(height));
                 var image = new Image(),
-                    data  = createData('/' + img(), pos, ctx.fillStyle, width, height);
+                    data  = createData(
+                        Math.round(Math.random() * 1000000000) / 1000, '/' + img(),
+                        pos,
+                        ctx.fillStyle,
+                        width,
+                        height
+                    );
                 setNewOrigin(pos.x, pos.y, data);
                 ctx.fillRect(
                     data.x,
@@ -785,6 +831,7 @@ $(document).ready(
                             data.height
                         );
                     }
+                    drawText(data);
                 };
                 mirroredData(data, realDraw);
             },
@@ -962,9 +1009,11 @@ $(document).ready(
             filterByCoord    = function (x, y, cb) {
                 eachOrigin(function (origin) {
                     var data = origin.data;
-                    if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
-                        cb(origin);
-                    }
+                    mirroredData(data, function(data) {
+                        if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
+                            cb(origin);
+                        }
+                    });
                 });
             };
         grid.addEventListener('mouseover', function (e) {
@@ -973,6 +1022,9 @@ $(document).ready(
 
         grid.addEventListener("mouseout", function (e) {
             console.log('out', e);
+            while(hovered.length > 0) {
+                hovered.pop().imageState.hover = false;
+            }
         });
 
         grid.addEventListener("click", function (e) {
@@ -1019,14 +1071,19 @@ $(document).ready(
                 ctx.fillRect(data.x, data.y, data.width, data.height);
             }
         ];
-
+        var hovered = [];
         eventedCallbacks.mousemove = [
             function (e, origin, x, y) {
+                while(hovered.length > 0) {
+                    hovered.pop().imageState.hover = false;
+                }
+                origin.data.imageState.hover = true;
+                hovered.push(origin.data);
                 ctx.fillStyle = "rgba(10, 0, 0, 0.01)";
                 var data = origin.data;
-                if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
+                //if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
                     ctx.fillRect(data.x, data.y, data.width, data.height);
-                }
+                //}
                 ctx.strokeStyle = "rgba(50, 10, 10, 0.3)";
                 ctx.beginPath();
                 ctx.arc(x, y, 2, 0, Math.PI * 2);
