@@ -25,6 +25,7 @@ $(document).ready(
             debugHighlightHole           = false,
             debugCropImage               = false,
             debugFPS                     = true,
+            debugMouseHover              = true,
             mirroring                    = true,
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             duplicateHoleSize            = [[1, 1],],//w x h
@@ -467,7 +468,7 @@ $(document).ready(
                         ctx.strokeStyle = 'rgba(255, 50, 0, 0.7)';
                         ctx.rect(x, y, w, h);
                         ctx.stroke();
-                        ctx.font = "20px Georgia";
+                        ctx.font = "20px MuseoSansRegular";
                         ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
                         ctx.fillText(
                             '' + originalOrigin.data.positionOnMap.x + ', ' + originalOrigin.data.positionOnMap.y,
@@ -612,7 +613,7 @@ $(document).ready(
                     data.textBuffer.width = data.width;
                     data.textBuffer.height = data.height;
                     var context = data.textBuffer.getContext('2d');
-                    context.font = '' + Math.round(scale * 0.12) + "px Georgia";
+                    context.font = '' + /*Math.round*/(scale * 0.12) + "px MuseoSansRegular";
                     context.fillStyle = 'rgba(255, 255, 255, 0.8)';
                     context.shadowColor = "rgba(0, 0, 0, 1)";
                     context.shadowOffsetX = 0;
@@ -713,9 +714,11 @@ $(document).ready(
                     data.width,
                     data.height
                 );
-                if (data.imageState.hover) {
+                if (data.imageState.hovering > 0) {
                     ctx.fillStyle = data.color;
+                    ctx.globalAlpha = data.imageState.hovering;
                     ctx.fillRect(data.x, data.y, data.width, data.height);
+                    ctx.globalAlpha = 1;
                 }
                 if (debugCropImage) {
                     ctx.restore();
@@ -972,7 +975,7 @@ $(document).ready(
                 }
                 onAnimationEnd();
                 if (debugFPS) {
-                    ctx.font = "72px Georgia";
+                    ctx.font = "72px MuseoSansRegular";
                     ctx.fillStyle = 'rgba(100, 100, 200, 1)';
                     if (debugFps2 > 10) {
                         debugFps1 = debugFps1 * 0.9 + 0.1 * (1000 / (new Date() - debugFps3)) * debugFps2;
@@ -1022,8 +1025,14 @@ $(document).ready(
 
         grid.addEventListener("mouseout", function (e) {
             console.log('out', e);
-            while(hovered.length > 0) {
-                hovered.pop().imageState.hover = false;
+            for(var j in hovered) {
+                if (hovered.hasOwnProperty(j)) {
+                    hovered[j].imageState.hover = false;
+                    if (hoveredRemoving.indexOf(hovered[j]) === -1) {
+                        hoveredRemoving.push(hovered[j]);
+                        removeFromHovered(hovered[j]);
+                    }
+                }
             }
         });
 
@@ -1071,38 +1080,104 @@ $(document).ready(
                 ctx.fillRect(data.x, data.y, data.width, data.height);
             }
         ];
-        var hovered = [];
+        var hovered = [],
+            hoveredRemoving = [],
+            hoveredAdding = [],
+            hoveringIncrement = 0.05,
+            hoveringInterval = 50,
+            freezTime = 200,
+            removeFromHovered = function(data) {
+                if (hovered.indexOf(data) === -1 || data.imageState.hover) {
+                    hoveredRemoving.splice(hoveredRemoving.indexOf(data), 1);
+                    return;
+                }
+                if (isNaN(data.imageState.hovering)) {
+                    data.imageState.hovering = 0;
+                }
+                data.imageState.hovering -= hoveringIncrement;
+                if (data.imageState.hovering > 0) {
+                    setTimeout(function() {
+                        removeFromHovered(data);
+                    }, hoveringInterval);
+                } else {
+                    hoveredRemoving.splice(hoveredRemoving.indexOf(data), 1);
+                    hovered.splice(hovered.indexOf(data), 1);
+                    data.imageState.hovering = 0;
+                }
+            },
+            addToHovered = function(data) {
+                if (hovered.indexOf(data) === -1 || !data.imageState.hover) {
+                    hoveredAdding.splice(hoveredAdding.indexOf(data), 1);
+                    return;
+                }
+                if (isNaN(data.imageState.hovering)) {
+                    data.imageState.hovering = 0;
+                } else {
+                    data.imageState.hovering += hoveringIncrement;
+                }
+                if (data.imageState.hovering < 1) {
+                    setTimeout(function() {
+                        addToHovered(data);
+                    }, hoveringInterval);
+                } else {
+                    hoveredAdding.splice(hoveredAdding.indexOf(data), 1);
+                    data.imageState.hovering = 1;
+                }
+            };
         eventedCallbacks.mousemove = [
             function (e, origin, x, y) {
-                while(hovered.length > 0) {
-                    hovered.pop().imageState.hover = false;
+                if (debugMouseHover) {
+                    ctx.fillStyle = "rgba(10, 0, 0, 0.01)";
+                    var data = origin.data;
+                    //if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
+                    ctx.fillRect(data.x, data.y, data.width, data.height);
+                    //}
+                    ctx.strokeStyle = "rgba(50, 10, 10, 0.3)";
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.font = "20px MuseoSansRegular";
+                    ctx.fillStyle = 'rgba(200, 100, 255, 0.3)';
+                    ctx.fillText(
+                        '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
+                        viewCenterX + transformFromMap(origin.data.positionOnMap.x),
+                        viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 20
+                    );
+                    ctx.fillText(
+                        "" + origin.data.width / scale + 'x' + origin.data.height / scale
+                        + (origin.duplicate ? ' d' : ''),
+                        viewCenterX + transformFromMap(origin.data.positionOnMap.x),
+                        viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 40
+                    );
+                }
+                if (!origin.data.imageState) {
+                    return;
                 }
                 origin.data.imageState.hover = true;
-                hovered.push(origin.data);
-                ctx.fillStyle = "rgba(10, 0, 0, 0.01)";
-                var data = origin.data;
-                //if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
-                    ctx.fillRect(data.x, data.y, data.width, data.height);
-                //}
-                ctx.strokeStyle = "rgba(50, 10, 10, 0.3)";
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.font = "20px Georgia";
-                ctx.fillStyle = 'rgba(200, 100, 255, 0.3)';
-                ctx.fillText(
-                    '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
-                    viewCenterX + transformFromMap(origin.data.positionOnMap.x),
-                    viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 20
-                );
-                ctx.fillText(
-                    "" + origin.data.width / scale + 'x' + origin.data.height / scale
-                    + (origin.duplicate ? ' d' : ''),
-                    viewCenterX + transformFromMap(origin.data.positionOnMap.x),
-                    viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 40
-                );
-
+                for(var j in hovered) {
+                    if (hovered.hasOwnProperty(j)) {
+                        if (origin.data === hovered[j]) {
+                            continue;
+                        }
+                        hovered[j].imageState.hover = false;
+                        if (hoveredRemoving.indexOf(hovered[j]) === -1) {
+                            hoveredRemoving.push(hovered[j]);
+                            setTimeout(function() {
+                                removeFromHovered(hovered[j]);
+                            }, freezTime);
+                        }
+                    }
+                }
+                if (hovered.indexOf(origin.data) === -1) {
+                    hovered.push(origin.data);
+                }
+                if (hoveredAdding.indexOf(origin.data) === -1) {
+                    hoveredAdding.push(origin.data);
+                    setTimeout(function() {
+                        addToHovered(origin.data);
+                    }, freezTime);
+                }
             }
         ];
 
