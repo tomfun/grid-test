@@ -709,16 +709,16 @@ $(document).ready(
                 }
                 if (data.outputBufferState.imageShiftX === data.imageState.x
                     && data.outputBufferState.imageShiftY === data.imageState.y
-                    && data.outputBuffer.width === data.width
-                    && data.outputBuffer.height === data.height
+                    && data.outputBuffer.width === Math.ceil(data.width)
+                    && data.outputBuffer.height === Math.ceil(data.height)
                     && data.outputBufferState.hovering === data.imageState.hovering
                 ) {
                     return;
                 }
                 cacheImage(data);
                 var image = data.getImage();
-                data.outputBuffer.width = data.width;
-                data.outputBuffer.height = data.height;
+                data.outputBuffer.width = Math.ceil(data.width);
+                data.outputBuffer.height = Math.ceil(data.height);
                 data.outputBufferState.imageShiftX = data.imageState.x;
                 data.outputBufferState.imageShiftY = data.imageState.y;
 
@@ -1113,6 +1113,7 @@ $(document).ready(
                 ctx.arc(x, y, 2, 0, Math.PI * 2);
                 ctx.stroke();
                 var data = origin.data;
+                data.text = '' + data.x.toFixed(1) +', ' + data.y.toFixed(1);
                 ctx.fillRect(data.x, data.y, data.width, data.height);
             }
         ];
@@ -1162,31 +1163,6 @@ $(document).ready(
             };
         eventedCallbacks.mousemove = [
             function (e, origin, x, y) {
-                if (debugMouseHover) {
-                    ctx.fillStyle = "rgba(10, 0, 0, 0.01)";
-                    var data = origin.data;
-                    //if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
-                    ctx.fillRect(data.x, data.y, data.width, data.height);
-                    //}
-                    ctx.strokeStyle = "rgba(50, 10, 10, 0.3)";
-                    ctx.beginPath();
-                    ctx.arc(x, y, 2, 0, Math.PI * 2);
-                    ctx.stroke();
-
-                    ctx.font = "20px MuseoSansRegular";
-                    ctx.fillStyle = 'rgba(200, 100, 255, 0.3)';
-                    ctx.fillText(
-                        '' + origin.data.positionOnMap.x + ', ' + origin.data.positionOnMap.y,
-                        viewCenterX + transformFromMap(origin.data.positionOnMap.x),
-                        viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 20
-                    );
-                    ctx.fillText(
-                        "" + origin.data.width / scale + 'x' + origin.data.height / scale
-                        + (origin.duplicate ? ' d' : ''),
-                        viewCenterX + transformFromMap(origin.data.positionOnMap.x),
-                        viewCenterY + transformFromMap(origin.data.positionOnMap.y) + 40
-                    );
-                }
                 if (!origin.data.imageState) {
                     return;
                 }

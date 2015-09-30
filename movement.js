@@ -150,7 +150,9 @@ $(document).ready(function ($) {
             start(e.clientX, e.clientY);
         },
         inputEnd:   function (e) {
-            inputmove(e.clientX, e.clientY);
+            if (!isNaN(e.clientX)) {
+                inputmove(e.clientX, e.clientY);
+            }
             end();
         },
         inputMove:  function (e) {

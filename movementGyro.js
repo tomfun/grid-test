@@ -84,12 +84,12 @@ $(document).ready(function ($) {
             if (accY < -maxAngle) {
                 accY = -maxAngle;
             }
-            $('span.debugg').text(
-                "DeviceOrientation: "
-                + ' (' + x.toFixed(1) + ',  ' + y.toFixed(1) + ')'
-            );
-            $('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
-            $('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
+            //$('span.debugg').text(
+            //    "DeviceOrientation: "
+            //    + ' (' + x.toFixed(1) + ',  ' + y.toFixed(1) + ')'
+            //);
+            //$('span.debugg21').text(accX.toFixed(2)).css('color', accX > 0 ? 'red' : 'blue');
+            //$('span.debugg22').text(accY.toFixed(2)).css('color', accY > 0 ? 'red' : 'blue');
             if (!window.scrollHack) {
                 return;//hack
             }
