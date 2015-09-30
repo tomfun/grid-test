@@ -1,10 +1,10 @@
 $(document).ready(
     function () {
+
         var grid = document.getElementsByClassName('grid')[0];
-        //grid.width = document.body.clientWidth - 30;
-        //grid.height = document.body.clientHeight - 90;
-        var
-            ctx     = grid.getContext('2d'),
+        grid.width = document.body.clientWidth;
+        grid.height = document.body.clientHeight - 80;
+        var ctx     = grid.getContext('2d'),
             gridMap = {};
         ctx.fillStyle = "rgb(200,0,0)";
         ctx.fillRect(10, 10, 55, 50);
@@ -23,10 +23,9 @@ $(document).ready(
             debugGreed                   = false,
             debugPolar                   = false,
             debugHighlightHole           = false,
-            debugCropImage               = false,
             debugFPS                     = true,
-            debugMouseHover              = true,
             mirroring                    = true,
+            zoomImageOnHover             = 1.1,//1.1 - plus 10%
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
             duplicateHoleSize            = [[1, 1],],//w x h
             duplicateSquareSize          = [[2, 2], [1, 1],],
@@ -597,10 +596,11 @@ $(document).ready(
                     data.imageBuffer.height = data.image.height * data.imageState.scale;
                     data.imageBuffer.getContext('2d').drawImage(data.image, 0, 0, data.imageBuffer.width, data.imageBuffer.height);
                     delete data.image;
-                    data.imageState.x *= data.imageState.scale;
-                    data.imageState.y *= data.imageState.scale;
-                    data.imageState.clipW *= data.imageState.scale;
-                    data.imageState.clipH *= data.imageState.scale;
+                    var scale = data.imageState.scale;
+                    data.imageState.x *= scale;
+                    data.imageState.y *= scale;
+                    data.imageState.clipW *= scale;
+                    data.imageState.clipH *= scale;
                     data.imageState.scale = 1;
                 }
             },
@@ -643,7 +643,8 @@ $(document).ready(
                         positionOnMap:       pos,
                         width:               width,
                         height:              height,
-                        getOutputContext: function() {
+                        hovering:            0,
+                        getOutputContext:    function () {
                             return this.outputBuffer.getContext('2d');
                         },
                         getImage:            function () {
@@ -722,24 +723,33 @@ $(document).ready(
                 data.outputBufferState.imageShiftX = data.imageState.x;
                 data.outputBufferState.imageShiftY = data.imageState.y;
 
-                var context = data.getOutputContext();
+                var context  = data.getOutputContext(),
+                    zoomedW  = data.imageState.clipW,
+                    zoomedH  = data.imageState.clipH,
+                    shiftedX = data.imageState.x,
+                    shiftedY = data.imageState.y;
+                data.outputBufferState.hovering = data.imageState.hovering;
+                var overlayOpacity = 0.85;
+                if (data.imageState.hovering > 0) {
+                    overlayOpacity = overlayOpacity - data.imageState.hovering * overlayOpacity;
+                    zoomedW *= (1 - data.imageState.hovering * (zoomImageOnHover - 1) / 2);
+                    zoomedH *= (1 - data.imageState.hovering * (zoomImageOnHover - 1) / 2);
+                    shiftedX += (data.imageState.clipW - zoomedW) / 2;
+                    shiftedY += (data.imageState.clipH - zoomedH) / 2;
+                }
+
                 context.drawImage(
                     image,
-                    data.imageState.x,
-                    data.imageState.y,
-                    data.imageState.clipW,
-                    data.imageState.clipH,
+                    shiftedX,
+                    shiftedY,
+                    zoomedW,
+                    zoomedH,
                     0,
                     0,
                     data.width,
                     data.height
                 );
 
-                data.outputBufferState.hovering = data.imageState.hovering;//todo: zoom
-                var overlayOpacity = 0.85;
-                if (data.imageState.hovering > 0) {
-                    overlayOpacity = overlayOpacity - data.imageState.hovering * overlayOpacity;
-                }
                 if (overlayOpacity > 0) {
                     if (data.gradientChoice < 0) {
                         context.fillStyle = data.getOverlayGradient1(overlayOpacity);
@@ -833,7 +843,7 @@ $(document).ready(
                     inArea    = function (p, size, viewSize) {
                         var t1 = p,
                             t2 = p + size;
-                        return (t1 >= 0 && t1 <= viewSize) || (t2 >= 0 && t2 <= viewSize);
+                        return (t1 >= 0 && t1 <= viewSize) || (t2 >= 0 && t2 <= viewSize) || (t1 < 0 && t2 > viewSize);
                     };
                 boxWidth = transformFromMap(boxWidth);
                 boxHeight = transformFromMap(boxHeight);
@@ -924,7 +934,7 @@ $(document).ready(
                 }
                 realScroll();
                 var drawed = [];
-                ctx.clearRect(0, 0, contextWidth, contextHeight);
+                //ctx.clearRect(0, 0, contextWidth, contextHeight);
                 for (var x in gridMap) {
                     for (var y in gridMap[x]) {
                         if (drawed.indexOf(gridMap[x][y].data) === -1) {
@@ -1029,6 +1039,9 @@ $(document).ready(
                 setTimeout(function () {
                     window.requestAnimationFrame(animate);
                 }, 2);
+                if (Math.random() < 0.1) {//с определённой вероятностью (примерно раз в 0.5 с) проверяем под мышкой ли свеже отрисованный элемент
+                    executeMouseMove();
+                }
                 //if ( !window.requestAnimationFrame ) {
                 //
                 //    window.requestAnimationFrame = ( function() {
@@ -1060,7 +1073,11 @@ $(document).ready(
         //    console.log('in', e);
         //});
 
+        var lastMouseOverX,
+            lastMouseOverY,
+            mouseOverGrid = false;
         grid.addEventListener("mouseout", function (e) {
+            mouseOverGrid = false;
             for (var j in hovered) {
                 if (hovered.hasOwnProperty(j)) {
                     hovered[j].imageState.hover = false;
@@ -1072,8 +1089,18 @@ $(document).ready(
             }
         });
 
+        var lastMouseDownX,
+            lastMouseDownY,
+            lastMouseDownTime = new Date();
         grid.addEventListener("click", function (e) {
             if (!eventedCallbacks.hasOwnProperty('click')) {
+                return;
+            }
+            if (
+                Math.abs(e.layerX - lastMouseDownX) > 3
+                || Math.abs(e.layerX - lastMouseDownX) > 3
+                || new Date() - lastMouseDownTime > 900
+            ) {
                 return;
             }
             filterByCoord(e.layerX, e.layerY, function (origin) {
@@ -1083,6 +1110,9 @@ $(document).ready(
             });
         });
         grid.addEventListener("mousedown", function (e) {
+            lastMouseDownX = e.layerX;
+            lastMouseDownY = e.layerY;
+            lastMouseDownTime = new Date();
             if (!eventedCallbacks.hasOwnProperty('mousedown')) {
                 return;
             }
@@ -1092,28 +1122,38 @@ $(document).ready(
                 }
             });
         });
+        var executeMouseMove = function() {
+            if (!mouseOverGrid) {
+                return;
+            }
+            filterByCoord(lastMouseOverX, lastMouseOverY, function (origin) {
+                for (var i in eventedCallbacks.mousemove) {
+                    eventedCallbacks.mousemove[i](mouseOverGrid, origin, lastMouseOverX, lastMouseOverY);
+                }
+            });
+        };
         grid.addEventListener("mousemove", function (e) {
             if (!eventedCallbacks.hasOwnProperty('mousemove')) {
                 return;
             }
-            filterByCoord(e.layerX, e.layerY, function (origin) {
-                for (var i in eventedCallbacks.mousemove) {
-                    eventedCallbacks.mousemove[i](e, origin, e.layerX, e.layerY);
-                }
-            });
+            lastMouseOverX = e.layerX;
+            lastMouseOverY = e.layerY;
+            mouseOverGrid = e;
+            executeMouseMove();
         });
 
 // Events --------------
 
         eventedCallbacks.click = [
             function (e, origin, x, y) {
+                console.log(x + ' ' + y)
                 ctx.fillStyle = "rgba(0, 50, 0, 0.2)";
                 ctx.strokeStyle = "rgb(50, 10, 10)";
                 ctx.beginPath();
                 ctx.arc(x, y, 2, 0, Math.PI * 2);
                 ctx.stroke();
                 var data = origin.data;
-                data.text = '' + data.x.toFixed(1) +', ' + data.y.toFixed(1);
+                data.text = '' + data.x.toFixed(1) + ', ' + data.y.toFixed(1);
                 ctx.fillRect(data.x, data.y, data.width, data.height);
             }
         ];

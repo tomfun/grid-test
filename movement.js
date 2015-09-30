@@ -161,7 +161,6 @@ $(document).ready(function ($) {
     };
 
     var attachListeners = function ($this, settings) {
-        var element = $this[0];
         $this.bind('touchstart', settings.events.touchStart)
             .bind('touchend', settings.events.inputEnd)
             .bind('touchmove', settings.events.touchMove);
