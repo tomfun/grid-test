@@ -137,6 +137,7 @@ $(document).ready(function ($) {
             touch = e.originalEvent.touches[0];
             start(touch.clientX, touch.clientY);
             e.stopPropagation();
+            e.preventDefault();
         },
         touchMove:  function (e) {
             var touch;
