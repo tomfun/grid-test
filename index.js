@@ -631,30 +631,49 @@ $(document).ready(
             createData                   = function (text, image, pos, color, width, height, dontCallOnLoad) {
                 var img = image ? (new Image()) : false,
                     res = {
-                        text:           text,
-                        imageSrc:       image,//src
-                        image:          img,
-                        x:              transformFromMap(pos.x) + viewCenterX,
-                        y:              transformFromMap(pos.y) + viewCenterY,
-                        color:          color,
-                        positionOnMap:  pos,
-                        width:          width,
-                        height:         height,
-                        getImage:       function () {
-                            if (this.image) {
-                                return this.image;
-                            }
+                        outputBuffer:        document.createElement('canvas'),
+                        outputBufferState:   {},
+                        text:                text,
+                        imageSrc:            image,//src
+                        image:               img,
+                        x:                   transformFromMap(pos.x) + viewCenterX,
+                        y:                   transformFromMap(pos.y) + viewCenterY,
+                        color:               color,
+                        gradientChoice:      (Math.random() > 0.5 ? 1 : -1),
+                        positionOnMap:       pos,
+                        width:               width,
+                        height:              height,
+                        getOutputContext: function() {
+                            return this.outputBuffer.getContext('2d');
+                        },
+                        getImage:            function () {
                             if (this.imageBuffer) {
                                 return this.imageBuffer;
                             }
+                            if (this.image) {
+                                return this.image;
+                            }
                         },
-                        getImageWidth:  function () {
+                        getOverlayGradient1: function (overlayOpacity, context, gradient) {
+                            //var grd = ctx.createLinearGradient(this.x, this.y + this.height, this.x + this.width, this.y);
+                            var grd = gradient || (context || ctx).createLinearGradient(0, this.height, this.width, 0);
+                            grd.addColorStop(0, "rgba(255, 0, 78, " + overlayOpacity + ")");//#ff004e
+                            grd.addColorStop(1, "rgba(134, 37, 255, " + overlayOpacity + ")");//#8625ff
+                            return grd;
+                        },
+                        getOverlayGradient2: function (overlayOpacity, context, gradient) {
+                            var grd = gradient || (context || ctx).createLinearGradient(0, this.height, this.width, 0);
+                            grd.addColorStop(0, "rgba(0, 255, 240, " + overlayOpacity + ")");//#00fff0
+                            grd.addColorStop(1, "rgba(134, 37, 255, " + overlayOpacity + ")");//#8625ff
+                            return grd;
+                        },
+                        getImageWidth:       function () {
                             return this.getImage() ? this.getImage().width : null;
                         },
-                        getImageHeight: function () {
+                        getImageHeight:      function () {
                             return this.getImage() ? this.getImage().height : null;
                         },
-                        setImageSrc:    function (src) {
+                        setImageSrc:         function (src) {
                             if (!src) {
                                 src = this.imageSrc;
                                 this.image.src = src;
@@ -669,15 +688,14 @@ $(document).ready(
                             }, false);
                         }
                     };
+                res.outputBuffer.width = width;
+                res.outputBuffer.height = height;
                 if (image) {
                     res.setImageSrc();
                 }
                 return res;
             },
             drawImage                    = function (data) {
-                //  simple variant
-                //var ptrn = ctx.createPattern(image, 'no-repeat');
-                //ctx.fillStyle = ptrn;
                 //ctx.fillRect(transformFromMap(pos.x) + 900, transformFromMap(pos.y) + 500, width, height);
 
                 //  draw with resize
@@ -689,51 +707,63 @@ $(document).ready(
                 if (!data.imageState) {
                     return;
                 }
+                if (data.outputBufferState.imageShiftX === data.imageState.x
+                    && data.outputBufferState.imageShiftY === data.imageState.y
+                    && data.outputBuffer.width === data.width
+                    && data.outputBuffer.height === data.height
+                    && data.outputBufferState.hovering === data.imageState.hovering
+                ) {
+                    return;
+                }
                 cacheImage(data);
                 var image = data.getImage();
-                if (debugCropImage) {
-                    ctx.save();
-                    ctx.globalAlpha = 0.3;
-                    ctx.drawImage(
-                        image,
-                        data.x - data.imageState.x/* * data.imageState.scale*/,
-                        data.y - data.imageState.y/* * data.imageState.scale*/,
-                        data.getImageWidth()/* * data.imageState.scale*/,
-                        data.getImageHeight()/* * data.imageState.scale*/
-                    );
-                    ctx.globalAlpha = 0.9;
-                }
-                ctx.drawImage(
+                data.outputBuffer.width = data.width;
+                data.outputBuffer.height = data.height;
+                data.outputBufferState.imageShiftX = data.imageState.x;
+                data.outputBufferState.imageShiftY = data.imageState.y;
+
+                var context = data.getOutputContext();
+                context.drawImage(
                     image,
                     data.imageState.x,
                     data.imageState.y,
                     data.imageState.clipW,
                     data.imageState.clipH,
-                    data.x,
-                    data.y,
+                    0,
+                    0,
                     data.width,
                     data.height
                 );
+
+                data.outputBufferState.hovering = data.imageState.hovering;//todo: zoom
+                var overlayOpacity = 0.85;
                 if (data.imageState.hovering > 0) {
-                    ctx.fillStyle = data.color;
-                    ctx.globalAlpha = data.imageState.hovering;
-                    ctx.fillRect(data.x, data.y, data.width, data.height);
-                    ctx.globalAlpha = 1;
+                    overlayOpacity = overlayOpacity - data.imageState.hovering * overlayOpacity;
                 }
-                if (debugCropImage) {
-                    ctx.restore();
+                if (overlayOpacity > 0) {
+                    if (data.gradientChoice < 0) {
+                        context.fillStyle = data.getOverlayGradient1(overlayOpacity);
+                    } else {
+                        context.fillStyle = data.getOverlayGradient2(overlayOpacity);
+                    }
+                    context.globalCompositeOperation = 'lighten';
+                    context.fillRect(0, 0, data.width, data.height);
+                    context.globalCompositeOperation = 'source-over';
                 }
+                data.outputBufferState.partialRedraw = true;
             },
             drawText                     = function (data) {
                 if (!data.text) {
                     return;
                 }
-                var image = cacheText(data);
-                ctx.drawImage(
-                    image,
-                    data.x,
-                    data.y
-                );
+                if (data.outputBufferState.partialRedraw) {
+                    var image = cacheText(data);
+                    data.getOutputContext().drawImage(
+                        image,
+                        0,
+                        0
+                    );
+                }
             },
             addNewItem                   = function (ev) {
                 //ev.preventDefault();
@@ -835,6 +865,8 @@ $(document).ready(
                         );
                     }
                     drawText(data);
+                    ctx.drawImage(data.outputBuffer, data.x, data.y);
+                    data.outputBufferState.partialRedraw = false;
                 };
                 mirroredData(data, realDraw);
             },
@@ -915,6 +947,11 @@ $(document).ready(
                                 diff;
                             if (!data.imageState.animationState) {
                                 data.imageState.animationState = time;
+                                continue;
+                            }
+                            if (!data.imageState.hovering) {
+                                data.imageState.animationState = time;
+                                drawItem(data);//todo test only
                                 continue;
                             }
                             oldTime = data.imageState.animationState;
@@ -1012,20 +1049,19 @@ $(document).ready(
             filterByCoord    = function (x, y, cb) {
                 eachOrigin(function (origin) {
                     var data = origin.data;
-                    mirroredData(data, function(data) {
+                    mirroredData(data, function (data) {
                         if (y >= data.y && y <= data.y + data.height && x >= data.x && x <= data.x + data.width) {
                             cb(origin);
                         }
                     });
                 });
             };
-        grid.addEventListener('mouseover', function (e) {
-            console.log('in', e);
-        });
+        //grid.addEventListener('mouseover', function (e) {
+        //    console.log('in', e);
+        //});
 
         grid.addEventListener("mouseout", function (e) {
-            console.log('out', e);
-            for(var j in hovered) {
+            for (var j in hovered) {
                 if (hovered.hasOwnProperty(j)) {
                     hovered[j].imageState.hover = false;
                     if (hoveredRemoving.indexOf(hovered[j]) === -1) {
@@ -1080,13 +1116,13 @@ $(document).ready(
                 ctx.fillRect(data.x, data.y, data.width, data.height);
             }
         ];
-        var hovered = [],
-            hoveredRemoving = [],
-            hoveredAdding = [],
+        var hovered           = [],
+            hoveredRemoving   = [],
+            hoveredAdding     = [],
             hoveringIncrement = 0.05,
-            hoveringInterval = 50,
-            freezTime = 200,
-            removeFromHovered = function(data) {
+            hoveringInterval  = 50,
+            freezeTime        = 200,
+            removeFromHovered = function (data) {
                 if (hovered.indexOf(data) === -1 || data.imageState.hover) {
                     hoveredRemoving.splice(hoveredRemoving.indexOf(data), 1);
                     return;
@@ -1096,7 +1132,7 @@ $(document).ready(
                 }
                 data.imageState.hovering -= hoveringIncrement;
                 if (data.imageState.hovering > 0) {
-                    setTimeout(function() {
+                    setTimeout(function () {
                         removeFromHovered(data);
                     }, hoveringInterval);
                 } else {
@@ -1105,7 +1141,7 @@ $(document).ready(
                     data.imageState.hovering = 0;
                 }
             },
-            addToHovered = function(data) {
+            addToHovered      = function (data) {
                 if (hovered.indexOf(data) === -1 || !data.imageState.hover) {
                     hoveredAdding.splice(hoveredAdding.indexOf(data), 1);
                     return;
@@ -1116,7 +1152,7 @@ $(document).ready(
                     data.imageState.hovering += hoveringIncrement;
                 }
                 if (data.imageState.hovering < 1) {
-                    setTimeout(function() {
+                    setTimeout(function () {
                         addToHovered(data);
                     }, hoveringInterval);
                 } else {
@@ -1155,7 +1191,7 @@ $(document).ready(
                     return;
                 }
                 origin.data.imageState.hover = true;
-                for(var j in hovered) {
+                for (var j in hovered) {
                     if (hovered.hasOwnProperty(j)) {
                         if (origin.data === hovered[j]) {
                             continue;
@@ -1163,9 +1199,9 @@ $(document).ready(
                         hovered[j].imageState.hover = false;
                         if (hoveredRemoving.indexOf(hovered[j]) === -1) {
                             hoveredRemoving.push(hovered[j]);
-                            setTimeout(function() {
+                            setTimeout(function () {
                                 removeFromHovered(hovered[j]);
-                            }, freezTime);
+                            }, freezeTime);
                         }
                     }
                 }
@@ -1174,9 +1210,9 @@ $(document).ready(
                 }
                 if (hoveredAdding.indexOf(origin.data) === -1) {
                     hoveredAdding.push(origin.data);
-                    setTimeout(function() {
+                    setTimeout(function () {
                         addToHovered(origin.data);
-                    }, freezTime);
+                    }, freezeTime);
                 }
             }
         ];
