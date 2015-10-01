@@ -5,6 +5,7 @@ requirejs([
     'movement',
     'gridView',
     'gridDataSource',
+    'fontLoader!MuseoSansRegular',
 ], function ($, movementMouse, movementGyro, movement, gridView, dataSource) {
     dataSource.loadMore(function (data) {
     });
@@ -14,7 +15,7 @@ requirejs([
         element.width = document.body.clientWidth;
         element.height = document.body.clientHeight - 80;
 
-        var grid = gridView(element, {});
+        var grid = gridView(element, {scale: 200});
         grid.batchAdd(dataSource.getAllData());
 
         $('.add').click(function () {

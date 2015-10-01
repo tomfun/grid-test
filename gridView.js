@@ -516,10 +516,15 @@ define([
                                 );
                             } else {
                                 // создаём дубликат, и помещаем его в сетку
-                                var data = createData(origin.data.text, origin.data.imageSrc, {
-                                    x: newX,
-                                    y: newY
-                                }, origin.data.color, scale * newWidth, scale * newHeight, true);
+                                var data = createData(
+                                    origin.data.text,
+                                    origin.data.userName,
+                                    origin.data.titlePhoto.src,
+                                    origin.data.ico.src,
+                                    origin.data.imageSrc, {
+                                        x: newX,
+                                        y: newY
+                                    }, origin.data.color, scale * newWidth, scale * newHeight, true);
                                 setNewOrigin(newX, newY, data, true);
                             }
                             return sizes[sizeKey];
@@ -610,7 +615,9 @@ define([
                 }
             },
             cacheText                    = function (data) {
-                if (!data.textBuffer && data.text !== undefined || Math.abs(data.width - data.textBuffer.width) > 1) {
+                if (!data.textBuffer && (data.text !== undefined || data.userName)
+                    || Math.abs(data.width - data.textBuffer.width) > 1
+                ) {
                     if (data.textBuffer) {
                         delete data.textBuffer;
                     }
@@ -618,27 +625,100 @@ define([
                     data.textBuffer.width = data.width;
                     data.textBuffer.height = data.height;
                     var context = data.textBuffer.getContext('2d');
-                    context.font = '' + /*Math.round*/(scale * 0.12) + "px MuseoSansRegular";
-                    context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    var fontSize = scale * 0.12;
+                    context.font = '' + fontSize + "px MuseoSansRegular";
+                    context.fillStyle = 'rgba(255, 255, 255, 0.8)';//79B7FD
                     context.shadowColor = "rgba(0, 0, 0, 1)";
                     context.shadowOffsetX = 0;
                     context.shadowOffsetY = Math.round(scale * 0.01);
                     context.shadowBlur = Math.round(scale * 0.05);
-                    //ctx.measureText(text).width
-                    context.fillText(
-                        '' + data.text,
-                        scale * 0.04,
-                        scale * 0.15
-                    );
+                    var marginLeft  = scale * 0.04,
+                        marginRight = scale * 0.04,
+                        marginTop   = scale * 0.15;
+                    if (data.userName) {
+                        context.fillText(
+                            '' + data.userName,
+                            marginLeft,
+                            marginTop
+                        );
+                    }
+
+                    if (data.width < 1) {
+                        return;
+                    }
+                    marginTop += fontSize;
+                    marginTop += scale * 0.1;
+                    fontSize = scale * 0.15;
+                    marginLeft = scale * 0.1;
+                    marginRight = scale * 0.1;
+                    context.shadowBlur = 0;
+                    context.font = '' + fontSize + "px MuseoSansRegular";
+                    context.fillStyle = '#79B7FD';
+                    context.shadowColor = "rgba(0, 0, 0, 0)";
+
+                    var text = '' + data.text, drawed = 0, tryLen = text.length, tmp;
+                    if (context.measureText(text).width + marginLeft + marginRight > data.width) {
+                        var modeWords = 4,
+                            lastLen;
+                        while (marginTop + fontSize < data.height && drawed < text.length) {
+                            lastLen = context.measureText(tmp = text.substr(drawed, tryLen)).width;
+                            while (lastLen + marginLeft + marginRight > data.width) {
+                                if (modeWords > 0) {
+                                    tryLen = text.lastIndexOf(['', '-', ' ', "\n", "↵"][modeWords], tryLen - 1);
+                                } else {
+                                    tryLen--;
+                                }
+                                if (tryLen <= 0) {
+                                    break;
+                                }
+                                lastLen = context.measureText(tmp = text.substr(drawed, tryLen)).width;
+                            }
+                            if (tryLen <= 0 && modeWords > 0) {
+                                tryLen = text.length - drawed;
+                                modeWords--;
+                                continue;
+                            }
+                            context.fillText(
+                                tmp,
+                                marginLeft,
+                                marginTop
+                            );
+                            drawed += tryLen;
+                            if (modeWords > 0) {
+                                drawed++;
+                            }
+                            tryLen = text.length - drawed;
+                            marginTop += fontSize;
+                            modeWords = 4;
+                        }
+                        if (marginTop + fontSize >= data.height && drawed < text.length) {
+                            context.fillText(
+                                '...',
+                                lastLen + marginLeft,
+                                marginTop - fontSize
+                            );
+                        }
+                    } else {
+                        context.fillText(
+                            '' + text,
+                            marginLeft,
+                            marginTop
+                        );
+                    }
                 }
                 return data.textBuffer;
             },
-            createData                   = function (text, image, pos, color, width, height, dontCallOnLoad) {
-                var img = image ? (new Image()) : false,
-                    res = {
+            createData                   = function (text, userName, titlePhoto, ico, image, pos, color, width, height, dontCallOnLoad) {
+                var img      = image ? (new Image()) : false,
+                    imgTitle = titlePhoto ? (new Image()) : false,
+                    imgIco   = ico ? (new Image()) : false,
+                    res      = {
                         outputBuffer:        document.createElement('canvas'),
                         outputBufferState:   {},
                         text:                text,
+                        userName:            userName,
+                        titlePhoto:          imgTitle,
+                        ico:                 imgIco,
                         imageSrc:            image,//src
                         image:               img,
                         x:                   transformFromMap(pos.x) + viewCenterX,
@@ -694,6 +774,20 @@ define([
                             }
                         }
                     };
+                if (titlePhoto) {
+                    imgTitle.addEventListener('load', function () {
+//                        initImage(res); todo
+                        drawImage(res);
+                    }, false);
+                    imgTitle.src = titlePhoto;
+                }
+                if (ico) {
+                    imgIco.addEventListener('load', function () {
+//                        initImage(res); todo
+                        drawImage(res);
+                    }, false);
+                    imgIco.src = ico;
+                }
                 res.outputBuffer.width = width;
                 res.outputBuffer.height = height;
                 if (image) {
@@ -776,13 +870,21 @@ define([
                 if (!data.text) {
                     return;
                 }
-                if (data.outputBufferState.partialRedraw) {
+                if (data.outputBufferState.partialRedraw
+                    || data.outputBufferState.text !== data.text
+                    || data.outputBufferState.partialRedraw === undefined
+                    || Math.abs(data.width - data.textBuffer.width) > 1
+                ) {
+                    if (!data.imageState) {
+                        data.getOutputContext().clearRect(0, 0, data.outputBuffer.width, data.outputBuffer.height);
+                    }
                     var image = cacheText(data);
                     data.getOutputContext().drawImage(
                         image,
                         0,
                         0
                     );
+                    data.outputBufferState.text = data.text;
                 }
             },
             addNewItem                   = function (item) {
@@ -795,14 +897,17 @@ define([
                 height = transformFromMap(size[1]);
 
                 pos = getNewOrigin(size[0], size[1]);
-                var data  = createData(
-                        item.text,
-                        item._photo,
-                        pos,
-                        ctx.fillStyle,
-                        width,
-                        height
-                    );
+                var data = createData(
+                    item.text,
+                    item.userName,
+                    item._titlePhoto,
+                    item.ico,
+                    item._photo,
+                    pos,
+                    ctx.fillStyle,
+                    width,
+                    height
+                );
                 setNewOrigin(pos.x, pos.y, data);
                 ctx.fillRect(
                     data.x,
@@ -912,7 +1017,7 @@ define([
                 }
                 realScroll();
                 var drawed = [];
-                //ctx.clearRect(0, 0, contextWidth, contextHeight);
+                ctx.clearRect(0, 0, contextWidth, contextHeight);
                 for (var x in gridMap) {
                     for (var y in gridMap[x]) {
                         if (drawed.indexOf(gridMap[x][y].data) === -1) {
@@ -1109,17 +1214,17 @@ define([
 // Events --------------
 
         eventedCallbacks.click = [
-            function (e, origin, x, y) {
-                console.log(x + ' ' + y)
-                ctx.fillStyle = "rgba(0, 50, 0, 0.2)";
-                ctx.strokeStyle = "rgb(50, 10, 10)";
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, Math.PI * 2);
-                ctx.stroke();
-                var data = origin.data;
-                data.text = '' + data.x.toFixed(1) + ', ' + data.y.toFixed(1);
-                ctx.fillRect(data.x, data.y, data.width, data.height);
-            }
+            //function (e, origin, x, y) {
+            //    console.log(x + ' ' + y)
+            //    ctx.fillStyle = "rgba(0, 50, 0, 0.2)";
+            //    ctx.strokeStyle = "rgb(50, 10, 10)";
+            //    ctx.beginPath();
+            //    ctx.arc(x, y, 2, 0, Math.PI * 2);
+            //    ctx.stroke();
+            //    var data = origin.data;
+            //    data.text = '' + data.x.toFixed(1) + ', ' + data.y.toFixed(1);
+            //    ctx.fillRect(data.x, data.y, data.width, data.height);
+            //}
         ];
         var hovered           = [],
             hoveredRemoving   = [],
@@ -1239,8 +1344,8 @@ define([
             redrawItems:      redrawItems,
             scrollCallback:   scrollCallback,//используется для скрола
             resizeCallback:   resize,
-            batchAdd:         function(items) {
-                for(var i in items) {
+            batchAdd:         function (items) {
+                for (var i in items) {
                     if (items.hasOwnProperty(i)) {
                         addNewItem(items[i]);
                     }
@@ -1252,7 +1357,7 @@ define([
                 publishStates[word][0] = width;
                 publishStates[word][1] = height;
             }
-        }
+        };
     };
 
 });
