@@ -1,35 +1,40 @@
-$(document).ready(
-    function () {
+define([
+    'jquery',
+], function ($, _) {
 
-        var grid = document.getElementsByClassName('grid')[0];
-        grid.width = document.body.clientWidth;
-        grid.height = document.body.clientHeight - 80;
+    if (!window.requestAnimationFrame) {
+        window.requestAnimationFrame = ( function () {
+            return window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame ||
+                window.oRequestAnimationFrame ||
+                window.msRequestAnimationFrame ||
+                function (/* function FrameRequestCallback */ callback, /* DOMElement Element */ element) {
+                    window.setTimeout(callback, 1000 / 24);
+                };
+
+        }());
+    }
+
+    return function (grid, options) {
         var ctx     = grid.getContext('2d'),
             gridMap = {};
-        ctx.fillStyle = "rgb(200,0,0)";
-        ctx.fillRect(10, 10, 55, 50);
-
-        ctx.fillStyle = "rgba(0, 0, 200, 0.5)";
-        ctx.fillRect(30, 30, 55, 50);
-
         // -------- constants & data
-        var count                        = 0,
-            scale                        = 200,//px per block (width and height)
+        var scale                        = options.scale || 200,//px per block (width and height)
             zoom                         = 1,//zoom, используется для внутренних нужд
             contextWidth                 = grid.width,
             contextHeight                = grid.height,
             viewCenterX                  = contextWidth / 2,
             viewCenterY                  = contextHeight / 2,
-            debugGreed                   = false,
-            debugPolar                   = false,
-            debugHighlightHole           = false,
-            debugFPS                     = true,
-            mirroring                    = true,
-            zoomImageOnHover             = 1.1,//1.1 - plus 10%
+            debugGreed                   = options.debugGreed || false,
+            debugPolar                   = options.debugPolar || false,
+            debugHighlightHole           = options.debugHighlightHole || false,
+            debugFPS                     = options.debugFPS || false,
+            mirroring                    = options.mirroring === undefined ? true : options.mirroring,
+            zoomImageOnHover             = options.zoomImageOnHover || 1.1,//1.1 - plus 10%
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
-            duplicateHoleSize            = [[1, 1],],//w x h
-            duplicateSquareSize          = [[2, 2], [1, 1],],
-
+            duplicateHoleSize            = options.duplicateHoleSize || [[1, 1],],//w x h
+            duplicateSquareSize          = options.duplicateSquareSize || [[2, 2], [1, 1],],
+            publishStates                = options.publishStates || {small: [1, 1], normal: [2, 2], big: [4, 3],},
             info                         = {//pinned only, not duplicates
                 left:       0,
                 right:      0,
@@ -166,7 +171,7 @@ $(document).ready(
                 }
                 ctx.stroke();
             },
-            onAdded                      = function (elem) {
+            onAdded                      = function () {
                 if (debugGreed) {
                     drawGreed();
                 }
@@ -175,7 +180,7 @@ $(document).ready(
                 }
                 hideHoles();
             },
-            onLoaded                     = function (elem) {
+            onLoaded                     = function () {
                 if (debugGreed) {
                     drawGreed();
                 }
@@ -675,11 +680,6 @@ $(document).ready(
                             return this.getImage() ? this.getImage().height : null;
                         },
                         setImageSrc:         function (src) {
-                            if (!src) {
-                                src = this.imageSrc;
-                                this.image.src = src;
-                                this.imageSrc = src;
-                            }
                             img.addEventListener('load', function () {
                                 initImage(res);
                                 drawImage(res);
@@ -687,6 +687,11 @@ $(document).ready(
                                     onLoaded(res);
                                 }
                             }, false);
+                            if (!src) {
+                                src = this.imageSrc;
+                                this.image.src = src;
+                                this.imageSrc = src;
+                            }
                         }
                     };
                 res.outputBuffer.width = width;
@@ -695,6 +700,11 @@ $(document).ready(
                     res.setImageSrc();
                 }
                 return res;
+            },
+            removeAll                    = function () {
+                gridMap = {};
+                recalculateInfo();
+
             },
             drawImage                    = function (data) {
                 //ctx.fillRect(transformFromMap(pos.x) + 900, transformFromMap(pos.y) + 500, width, height);
@@ -775,41 +785,19 @@ $(document).ready(
                     );
                 }
             },
-            addNewItem                   = function (ev) {
-                //ev.preventDefault();
-                var trueFalse = function () {
-                        return Math.random() > .5;
-                    },
-                    img       = function () {
-                        return imgs[count % imgs.length];
-                    },
-                    color     = function () {
-                        return "rgba(200, 0, " + Math.floor(200 * (0.275 + Math.random())) + ", 0.5)";
-                    },
-                    width     = scale,
-                    height    = scale,
+            addNewItem                   = function (item) {
+                var width,
+                    height,
                     pos;
-                ctx.fillStyle = color();
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
-                //if (trueFalse()) {
-                //    height *= 2;
-                //}
-                //if (trueFalse()) {
-                //    width *= 2;
-                //}
-                //if (trueFalse()) {
-                //    width *= 2;
-                //}
-                if (trueFalse()) {
-                    width *= 2;
-                    height *= 2;
-                }
-                pos = getNewOrigin(transformToMap(width), transformToMap(height));
-                var image = new Image(),
-                    data  = createData(
-                        Math.round(Math.random() * 1000000000) / 1000, '/' + img(),
+                ctx.fillStyle = publishStates.color || 'rgba(105, 36, 189, 1)';
+                var size = publishStates[item.publishState] || publishStates.small;
+                width = transformFromMap(size[0]);
+                height = transformFromMap(size[1]);
+
+                pos = getNewOrigin(size[0], size[1]);
+                var data  = createData(
+                        item.text,
+                        item._photo,
                         pos,
                         ctx.fillStyle,
                         width,
@@ -822,16 +810,6 @@ $(document).ready(
                     width,
                     height
                 );
-                onAdded(data);
-                count++;
-            },
-            addNewItems                  = function (n) {
-                if (!n) {
-                    n = 10;
-                }
-                for (var faker = 0; faker < 10; faker++) {
-                    addNewItem();
-                }
             },
             mirroredData                 = function (data, cb) {
                 if (!mirroring) {
@@ -1042,21 +1020,7 @@ $(document).ready(
                 if (Math.random() < 0.1) {//с определённой вероятностью (примерно раз в 0.5 с) проверяем под мышкой ли свеже отрисованный элемент
                     executeMouseMove();
                 }
-                //if ( !window.requestAnimationFrame ) {
-                //
-                //    window.requestAnimationFrame = ( function() {
-                //
-                //        return window.webkitRequestAnimationFrame ||
-                //            window.mozRequestAnimationFrame ||
-                //            window.oRequestAnimationFrame ||
-                //            window.msRequestAnimationFrame ||
-                //            function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
-                //                window.setTimeout( callback, 1000 / 60 );
-                //            };
-                //
-                //    }());
-                //
-                //}
+
             };
         var eventedCallbacks = {},
             filterByCoord    = function (x, y, cb) {
@@ -1122,7 +1086,7 @@ $(document).ready(
                 }
             });
         });
-        var executeMouseMove = function() {
+        var executeMouseMove = function () {
             if (!mouseOverGrid) {
                 return;
             }
@@ -1160,7 +1124,7 @@ $(document).ready(
         var hovered           = [],
             hoveredRemoving   = [],
             hoveredAdding     = [],
-            hoveringIncrement = 0.05,
+            hoveringIncrement = 0.1,
             hoveringInterval  = 50,
             freezeTime        = 200,
             removeFromHovered = function (data) {
@@ -1232,48 +1196,64 @@ $(document).ready(
                 }
             }
         ];
-
-        $('.add').click(addNewItem);
-        $('.addn').click(addNewItems);
-        $('.redraw').click(function () {
-            redrawItems();
-        });
-        $('.animate').click(function () {
-            animationOn = !animationOn;
-            window.requestAnimationFrame(animate);
-        });
         // zoom
-        var resize = function (newSize) {
-            if (newSize === zoom) {
-                return;
-            }
-            var multiply = newSize / zoom;
-            scale *= multiply;
-            viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) * multiply;
-            viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) * multiply;
-            eachOrigin(function (origin, mapX, mapY) {
-                var data = origin.data;
-                data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
-                data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
-                data.width *= multiply;
-                data.height *= multiply;
-            });
-            zoom = newSize;
-        };
-        window.scrollCallback = function (dx, dy) {
-            scrollX += dx;
-            scrollY += dy;
-        };
+        var resize         = function (newSize) {
+                if (newSize === zoom) {
+                    return;
+                }
+                var multiply = newSize / zoom;
+                scale *= multiply;
+                viewCenterX = contextWidth / 2 + (viewCenterX - contextWidth / 2) * multiply;
+                viewCenterY = contextHeight / 2 + (viewCenterY - contextHeight / 2) * multiply;
+                eachOrigin(function (origin, mapX, mapY) {
+                    var data = origin.data;
+                    data.x = transformFromMap(data.positionOnMap.x) + viewCenterX;
+                    data.y = transformFromMap(data.positionOnMap.y) + viewCenterY;
+                    data.width *= multiply;
+                    data.height *= multiply;
+                });
+                zoom = newSize;
+            },
+            scrollCallback = function (dx, dy) {
+                scrollX += dx;
+                scrollY += dy;
+            };
 
-// debug -----------
-        window.xxX = resize;//REMOVE
         if (debugGreed) {
             drawGreed();
         }
         if (debugPolar) {
             drawPolar();
         }
-    }
-)
-;
+
+        return {
+            eventedCallbacks: eventedCallbacks,
+            toggleAnimation:  function (an) {
+                if (an !== undefined) {
+                    animationOn = !!an;
+                } else {
+                    animationOn = !animationOn;
+                }
+                window.requestAnimationFrame(animate);
+            },
+            redrawItems:      redrawItems,
+            scrollCallback:   scrollCallback,//используется для скрола
+            resizeCallback:   resize,
+            batchAdd:         function(items) {
+                for(var i in items) {
+                    if (items.hasOwnProperty(i)) {
+                        addNewItem(items[i]);
+                    }
+                }
+                hideHoles();
+            },
+            removeAll:        removeAll,
+            changeSize:       function (word, width, height) {//меняет размер нововставляемых карточек
+                publishStates[word][0] = width;
+                publishStates[word][1] = height;
+            }
+        }
+    };
+
+});
 
