@@ -1,13 +1,11 @@
 define([
-//    'jquery',
-//    'lodash',
-//    'jquery.mousewheel',
     'gyro'
 ], function (gyro) {
 
     var warningCounter = 0;
 
     return function (scrollCallback, options) {
+        options = options || {};
         var orientation = null;
         var accCount          = 0,
             accX              = 0,

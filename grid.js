@@ -9,7 +9,8 @@ requirejs([
     dataSource.loadMore(function (data) {
     });
     $(document).ready(function () {
-        var element = document.getElementsByClassName('grid')[0];//canvas
+        var $element = $('.grid'),
+            element  = $element[0];//canvas
         element.width = document.body.clientWidth;
         element.height = document.body.clientHeight - 80;
 
@@ -32,6 +33,9 @@ requirejs([
             grid.toggleAnimation();
         });
         grid.toggleAnimation(true);
+        var moveCallback = movement($element, grid.scrollCallback).manualScrollCallback;
+        movementMouse($element, moveCallback, grid.resizeCallback);
+        movementGyro(moveCallback);
     });
 
 });

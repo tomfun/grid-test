@@ -1,9 +1,9 @@
 define([
     'jquery',
-//    'lodash',
     'jquery.mousewheel',
-], function($, _) {
+], function($) {
     return function($this, scrollCallback, zoomCallback, options) {
+        options = options || {};
         var $this      = $('.grid'),
             lastX,
             lastY,
