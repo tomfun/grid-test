@@ -54,7 +54,7 @@ define([
             },
             loadMore:   function (cb) {
                 var partialData = [];
-                for (var i = 0; i < 4; i++) {
+                for (var i = 0; i < 50; i++) {
                     var t = this._loadOne();
                     partialData.push(t);
                     data.push(t);

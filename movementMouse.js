@@ -14,7 +14,7 @@ define([
             multiplier = options.multiplier || -0.2;
         var gridWidth  = $this.width(),
             gridHeight = $this.height();
-        $this.resize(function() {
+        $this.on('resize-el', function() {
             gridWidth  = $this.width();
             gridHeight = $this.height();
         });

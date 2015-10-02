@@ -29,6 +29,7 @@ define([
             debugPolar                   = options.debugPolar || false,
             debugHighlightHole           = options.debugHighlightHole || false,
             debugFPS                     = options.debugFPS || false,
+            debugText                    = options.debugText || false,
             mirroring                    = options.mirroring === undefined ? true : options.mirroring,
             zoomImageOnHover             = options.zoomImageOnHover || 1.1,//1.1 - plus 10%
             maximumRadius                = 2850536294,//principal maximum radius 285053629418320 ! on my machine
@@ -615,7 +616,7 @@ define([
                 }
             },
             cacheText                    = function (data) {
-                if (!data.textBuffer && (data.text !== undefined || data.userName)
+                if (!data.textBuffer && (data.text !== undefined || data.userName !== undefined)
                     || Math.abs(data.width - data.textBuffer.width) > 1
                 ) {
                     if (data.textBuffer) {
@@ -632,19 +633,24 @@ define([
                     context.shadowOffsetX = 0;
                     context.shadowOffsetY = Math.round(scale * 0.01);
                     context.shadowBlur = Math.round(scale * 0.05);
-                    var marginLeft  = scale * 0.04,
-                        marginRight = scale * 0.04,
-                        marginTop   = scale * 0.15;
+                    context.textBaseline = "top";
+                    var marginLeft = scale * 0.04,
+                        marginRight,
+                        marginTop  = scale * 0.15;
                     if (data.userName) {
                         context.fillText(
                             '' + data.userName,
                             marginLeft,
                             marginTop
                         );
+                        if (debugText) {
+                            context.rect(marginLeft, marginTop, data.width - marginLeft, fontSize);
+                            context.stroke();
+                        }
                     }
 
-                    if (data.width < 1) {
-                        return;
+                    if (data.width < 1 || data.text === undefined) {
+                        return data.textBuffer;
                     }
                     marginTop += fontSize;
                     marginTop += scale * 0.1;
@@ -683,6 +689,9 @@ define([
                                 marginLeft,
                                 marginTop
                             );
+                            if (debugText) {
+                                context.rect(marginLeft, marginTop, data.width - marginRight - marginLeft, fontSize);
+                            }
                             drawed += tryLen;
                             if (modeWords > 0) {
                                 drawed++;
@@ -704,6 +713,9 @@ define([
                             marginLeft,
                             marginTop
                         );
+                    }
+                    if (debugText) {
+                        context.stroke();
                     }
                 }
                 return data.textBuffer;
@@ -743,7 +755,8 @@ define([
                         getOverlayGradient1: function (overlayOpacity, context, gradient) {
                             //var grd = ctx.createLinearGradient(this.x, this.y + this.height, this.x + this.width, this.y);
                             var grd = gradient || (context || ctx).createLinearGradient(0, this.height, this.width, 0);
-                            grd.addColorStop(0, "rgba(255, 0, 78, " + overlayOpacity + ")");//#ff004e
+                            //grd.addColorStop(0, "rgba(255, 0, 78, " + overlayOpacity + ")");//#ff004e
+                            grd.addColorStop(0, "rgba(255, 0, 180, " + overlayOpacity + ")");//#ff00b4
                             grd.addColorStop(1, "rgba(134, 37, 255, " + overlayOpacity + ")");//#8625ff
                             return grd;
                         },
@@ -867,24 +880,40 @@ define([
                 data.outputBufferState.partialRedraw = true;
             },
             drawText                     = function (data) {
-                if (!data.text) {
+                if (!data.text && !data.userName) {
                     return;
                 }
-                if (data.outputBufferState.partialRedraw
-                    || data.outputBufferState.text !== data.text
+                if (
+                    data.outputBufferState.text !== data.text
+                    || data.outputBufferState.userName !== data.userName
+                    || (zoom === 1 && Math.abs(data.width - data.textBuffer.width) > 1)
+                ) {
+                    cacheText(data);
+                    data.outputBufferState.text = data.text;
+                    data.outputBufferState.userName = data.userName;
+                }
+                if (
+                    data.outputBufferState.partialRedraw
                     || data.outputBufferState.partialRedraw === undefined
-                    || Math.abs(data.width - data.textBuffer.width) > 1
+                    || (data.outputBufferState.textWidth !== data.width)
                 ) {
                     if (!data.imageState) {
                         data.getOutputContext().clearRect(0, 0, data.outputBuffer.width, data.outputBuffer.height);
                     }
-                    var image = cacheText(data);
-                    data.getOutputContext().drawImage(
-                        image,
+                    var textBuffer = data.textBuffer,
+                        out = data.getOutputContext();
+                    out.drawImage(
+                        textBuffer,
                         0,
-                        0
+                        0,
+                        textBuffer.width,
+                        textBuffer.height,
+                        0,
+                        0,
+                        Math.round(data.width),
+                        Math.round(data.height)
                     );
-                    data.outputBufferState.text = data.text;
+                    data.outputBufferState.textWidth = data.width;
                 }
             },
             addNewItem                   = function (item) {
@@ -1113,7 +1142,7 @@ define([
                         debugFps3 = new Date();
                     }
                     ctx.fillText(
-                        '' + debugFps1.toFixed(),
+                        '' + debugFps1.toFixed(1),
                         0,
                         72
                     );
@@ -1121,7 +1150,7 @@ define([
                 }
                 setTimeout(function () {
                     window.requestAnimationFrame(animate);
-                }, 2);
+                }, 3);
                 if (Math.random() < 0.1) {//с определённой вероятностью (примерно раз в 0.5 с) проверяем под мышкой ли свеже отрисованный элемент
                     executeMouseMove();
                 }
@@ -1356,6 +1385,11 @@ define([
             changeSize:       function (word, width, height) {//меняет размер нововставляемых карточек
                 publishStates[word][0] = width;
                 publishStates[word][1] = height;
+            },
+            resize:           function () {
+                contextHeight = grid.height;
+                contextWidth = grid.width;
+                redrawItems();
             }
         };
     };
